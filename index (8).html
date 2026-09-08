@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FAF8F5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="雨天陪看">
+    <title>耳机のchar一起看</title>
+
+    <!-- PWA 配置 (主屏幕图标为 🌧) -->
+    <script>
+        const manifestObj = {
+            "name": "下雨时的阴雨天 - Char陪读",
+            "short_name": "雨天陪看",
+            "start_url": "./index.html",
+            "display": "standalone",
+            "background_color": "#FAF8F5",
+            "theme_color": "#FAF8F5",
+            "icons": [{
+                "src": "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌧</text></svg>",
+                "sizes": "192x192 512x512",
+                "type": "image/svg+xml"
+            }]
+        };
+        const blob = new Blob([JSON.stringify(manifestObj)], {type: 'application/json'});
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = URL.createObjectURL(blob);
+        document.head.appendChild(link);
+    </script>
+
+    <style>
+        /* ================= 1. 极简米白与浅灰配色系统 ================= */
+        :root {
+            --bg-main: #FAF8F5;         /* 主背景：淡雅米白 */
+            --bg-card: #FFFFFF;         /* 卡片：纯白 */
+            --bg-hover: #F0ECE4;        /* 悬停态浅灰 */
+            --btn-bg: #EDE8DF;          /* 按键主要浅灰色 */
+            --btn-bg-hover: #E2DDD3;    /* 按键悬停浅灰色 */
+            --btn-border: #DCD5C9;      /* 按键精致细微边框 */
+            --text-main: #38322B;       /* 主文字：柔和暖黑 */
+            --text-sub: #857B70;        /* 副文字：温润灰棕 */
+            --border-line: #E8E2D6;     /* 全局分割线 */
+            --shadow-soft: 0 4px 16px rgba(56, 50, 43, 0.04);
+            --radius-m: 10px;
+            --radius-l: 16px;
+            --transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        body.theme-night {
+            --bg-main: #181716;
+            --bg-card: #22201E;
+            --bg-hover: #2E2B28;
+            --btn-bg: #2C2926;
+            --btn-bg-hover: #383430;
+            --btn-border: #3D3934;
+            --text-main: #E2DDD6;
+            --text-sub: #948C82;
+            --border-line: #302C28;
+            --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0; padding: 0;
+            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            width: 100vw; height: 100vh;
+            overflow: hidden; position: relative;
+        }
+
+        .svg-icon {
+            width: 20px; height: 20px;
+            stroke: currentColor; stroke-width: 1.4;
+            stroke-linecap: round; stroke-linejoin: round;
+            fill: none; display: inline-block; vertical-align: middle;
+        }
+
+        /* ================= 2. 全屏页面 (SPA) 架构 ================= */
+        .page-view {
+            position: fixed; inset: 0;
+            background-color: var(--bg-main);
+            display: flex; flex-direction: column;
+            z-index: 10;
+            opacity: 0; pointer-events: none;
+            transform: translateX(16px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            overflow: hidden;
+        }
+        .page-view.active {
+            opacity: 1; pointer-events: auto;
+            transform: translateX(0);
+            z-index: 100;
+        }
+
+        /* 统一顶栏：左侧固定为返回箭头 */
+        .page-header {
+            height: 52px; padding: 0 14px;
+            display: flex; align-items: center; justify-content: space-between;
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border-line);
+            flex-shrink: 0; z-index: 5;
+        }
+        .page-title { font-size: 0.98rem; font-weight: 600; color: var(--text-main); }
+        .page-content { flex: 1; overflow-y: auto; padding: 18px 16px; }
+
+        .nav-btn {
+            background: none; border: none; color: var(--text-main); cursor: pointer; padding: 6px;
+            border-radius: 50%; transition: var(--transition); display: flex; align-items: center; justify-content: center;
+        }
+        .nav-btn:hover { background-color: var(--bg-hover); }
+
+        /* ================= 3. 浅灰色系按键与表单 ================= */
+        .btn-primary {
+            width: 100%; padding: 12px;
+            background: var(--btn-bg);
+            color: var(--text-main);
+            border: 1px solid var(--btn-border);
+            border-radius: var(--radius-m);
+            font-size: 0.88rem; font-weight: 500;
+            cursor: pointer; transition: var(--transition);
+            text-align: center; display: block; text-decoration: none;
+        }
+        .btn-primary:active { background: var(--btn-bg-hover); }
+
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 0.8rem; color: var(--text-sub); margin-bottom: 6px; }
+        .form-input, .form-textarea, .form-select {
+            width: 100%; padding: 10px 12px; background: var(--bg-card);
+            border: 1px solid var(--border-line); border-radius: var(--radius-m);
+            color: var(--text-main); font-size: 0.88rem; outline: none; transition: var(--transition);
+        }
+        .form-input:focus, .form-textarea:focus { border-color: #B5ACA0; }
+
+        /* 纯净文本式点击上传（彻底移除原生黑边框） */
+        .click-upload-trigger {
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            width: 100%; padding: 12px; background: var(--bg-card);
+            border: 1px dashed var(--btn-border); border-radius: var(--radius-m);
+            color: var(--text-sub); font-size: 0.84rem; cursor: pointer; transition: var(--transition);
+        }
+        .click-upload-trigger:active { background: var(--bg-hover); color: var(--text-main); }
+        .click-upload-trigger span { pointer-events: none; }
+
+        /* ================= 4. 开场加载动画 ================= */
+        #loading-screen {
+            position: fixed; inset: 0; background-color: var(--bg-main); z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.6s ease, visibility 0.6s;
+        }
+        .umbrella-wrapper { position: relative; margin-bottom: 20px; }
+        .umbrella-icon { width: 52px; height: 52px; stroke: #998E82; stroke-width: 1.2; fill: none; }
+        .drop { position: absolute; background-color: #998E82; border-radius: 50%; opacity: 0.5; animation: dropRain 1.8s infinite ease-in; }
+        .drop-1 { width: 4px; height: 4px; top: -10px; left: 8px; animation-delay: 0s; }
+        .drop-2 { width: 5px; height: 5px; top: -14px; left: 26px; animation-delay: 0.4s; }
+        .drop-3 { width: 3px; height: 3px; top: -8px; left: 44px; animation-delay: 0.8s; }
+
+        @keyframes dropRain {
+            0% { transform: translateY(-10px); opacity: 0; }
+            50% { opacity: 0.7; }
+            100% { transform: translateY(40px); opacity: 0; }
+        }
+        .loading-text { text-align: center; line-height: 1.8; color: var(--text-main); font-size: 0.88rem; }
+        .loading-subtext { margin-top: 10px; color: var(--text-sub); font-size: 0.76rem; }
+
+        /* ================= 5. 首页与侧边栏 ================= */
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+
+        .category-sidebar {
+            width: 88px; background: var(--bg-main); border-right: 1px solid var(--border-line);
+            padding: 10px 6px; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex-shrink: 0;
+        }
+        @media (min-width: 768px) { .category-sidebar { width: 160px; padding: 14px 10px; } }
+
+        .category-add-btn {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+            width: 100%; padding: 8px 4px; border: 1px dashed var(--btn-border); border-radius: var(--radius-m);
+            background: transparent; color: var(--text-sub); font-size: 0.72rem; cursor: pointer; text-align: center;
+        }
+        .category-item {
+            padding: 8px 4px; border-radius: var(--radius-m); color: var(--text-sub); font-size: 0.78rem;
+            cursor: pointer; text-align: center; word-break: break-all;
+        }
+        .category-item.active { background-color: var(--btn-bg); color: var(--text-main); font-weight: 600; }
+
+        .bookshelf-view {
+            flex: 1; padding: 12px 8px; overflow-y: auto; display: grid;
+            grid-template-columns: repeat(3, 1fr); grid-auto-rows: max-content; gap: 12px 8px;
+        }
+        @media (min-width: 768px) { .bookshelf-view { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 20px 16px; padding: 20px; } }
+
+        .book-card { display: flex; flex-direction: column; cursor: pointer; user-select: none; transition: var(--transition); }
+        .book-card:active { transform: scale(0.98); }
+        .book-cover {
+            width: 100%; aspect-ratio: 3/4; background-color: #EAE5DC; border-radius: 6px;
+            box-shadow: var(--shadow-soft); overflow: hidden; position: relative; border: 1px solid var(--border-line);
+            display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px;
+        }
+        .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .book-cover-text { font-size: 0.75rem; color: var(--text-main); font-weight: 600; word-break: break-all; line-height: 1.25; }
+        .book-title { margin-top: 5px; font-size: 0.75rem; font-weight: 500; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+        .book-author { font-size: 0.65rem; color: var(--text-sub); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
+
+        /* 左侧半屏抽屉 */
+        .sidebar-drawer {
+            position: fixed; top: 0; left: 0; bottom: 0; width: 230px; background: var(--bg-main); z-index: 500;
+            transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+            border-right: 1px solid var(--border-line); padding: 18px 10px; display: flex; flex-direction: column; gap: 6px;
+            box-shadow: 2px 0 20px rgba(0,0,0,0.06);
+        }
+        .sidebar-drawer.open { transform: translateX(0); }
+        .drawer-item {
+            display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: var(--radius-m);
+            color: var(--text-main); font-size: 0.88rem; cursor: pointer; transition: var(--transition);
+        }
+        .drawer-item:hover { background-color: var(--bg-hover); }
+
+        /* 人设库网格：Char 5列/User 4列 */
+        .persona-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+        .persona-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .persona-item-card {
+            display: flex; flex-direction: column; align-items: center; text-align: center; cursor: pointer;
+            padding: 6px 4px; border-radius: var(--radius-m); background: var(--bg-card); border: 1px solid var(--border-line);
+        }
+        .persona-item-card.selected { border-color: #8C8275; background: var(--btn-bg); }
+        .persona-avatar {
+            width: 38px; height: 38px; border-radius: 50%; background: var(--btn-bg); color: var(--text-main);
+            display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 0.95rem; overflow: hidden; margin-bottom: 4px;
+        }
+        .persona-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .persona-name { font-size: 0.68rem; color: var(--text-main); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .persona-relation { font-size: 0.6rem; color: var(--text-sub); }
+
+        /* ================= 6. 阅读器 ================= */
+        #page-reader { z-index: 200; background-size: cover; background-position: center; }
+        .reader-bar {
+            position: absolute; left: 0; right: 0; background: rgba(250, 248, 245, 0.96);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); padding: 10px 14px;
+            display: flex; align-items: center; justify-content: space-between; transition: transform 0.25s ease, opacity 0.25s ease;
+            z-index: 20; border-color: var(--border-line);
+        }
+        .reader-header { top: 0; border-bottom: 1px solid var(--border-line); }
+        .reader-footer { bottom: 0; border-top: 1px solid var(--border-line); justify-content: space-around; }
+        .reader-bar.collapsed-top { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+        .reader-bar.collapsed-bottom { transform: translateY(100%); opacity: 0; pointer-events: none; }
+
+        .reader-toggle-trigger {
+            position: absolute; left: 50%; transform: translateX(-50%); background: rgba(250, 248, 245, 0.85);
+            border: 1px solid var(--border-line); padding: 4px 14px; border-radius: 12px; cursor: pointer;
+            color: var(--text-sub); display: flex; align-items: center; justify-content: center; z-index: 15;
+        }
+        .trigger-top { top: 6px; }
+        .trigger-bottom { bottom: 6px; }
+
+        .reader-body {
+            flex: 1; padding: 50px 18px; overflow-y: auto; color: var(--text-main);
+            font-size: 17px; line-height: 1.8; max-width: 800px; margin: 0 auto; width: 100%;
+        }
+        .reader-paragraph { margin-bottom: 1.1em; text-align: justify; position: relative; cursor: pointer; }
+        .comment-badge {
+            display: inline-flex; align-items: center; gap: 2px; font-size: 0.68rem; color: var(--text-main);
+            background: var(--btn-bg); padding: 1px 5px; border-radius: 8px; margin-left: 5px;
+            cursor: pointer; vertical-align: middle;
+        }
+
+        /* 模态框 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.25); backdrop-filter: blur(4px);
+            z-index: 1000; display: none; align-items: center; justify-content: center; padding: 16px;
+        }
+        .modal-box {
+            background: var(--bg-main); border-radius: var(--radius-l); width: 100%; max-width: 420px;
+            max-height: 85vh; overflow-y: auto; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            border: 1px solid var(--border-line); position: relative;
+        }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+        .modal-title { font-size: 1rem; font-weight: 600; color: var(--text-main); }
+        .modal-close { background: none; border: none; color: var(--text-sub); cursor: pointer; }
+
+        .bottom-sheet {
+            position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-main); border-top-left-radius: var(--radius-l);
+            border-top-right-radius: var(--radius-l); padding: 18px; box-shadow: 0 -8px 24px rgba(0,0,0,0.06); z-index: 800;
+            transform: translateY(100%); transition: transform 0.25s ease; max-height: 80vh; overflow-y: auto; border-top: 1px solid var(--border-line);
+        }
+        .bottom-sheet.open { transform: translateY(0); }
+
+        .number-picker {
+            display: flex; align-items: center; border: 1px solid var(--border-line); border-radius: var(--radius-m);
+            width: max-content; overflow: hidden; background: var(--bg-card);
+        }
+        .number-btn { width: 34px; height: 34px; background: none; border: none; color: var(--text-main); font-size: 1rem; cursor: pointer; }
+        .number-input { width: 44px; text-align: center; border: none; outline: none; font-size: 0.9rem; color: var(--text-main); background: transparent; }
+
+        .comment-drawer {
+            position: fixed; bottom: 0; left: 0; right: 0; height: 70vh; background: var(--bg-main);
+            border-top-left-radius: var(--radius-l); border-top-right-radius: var(--radius-l); z-index: 850;
+            display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.25s ease;
+            box-shadow: 0 -8px 24px rgba(0,0,0,0.08); border-top: 1px solid var(--border-line);
+        }
+        .comment-drawer.open { transform: translateY(0); }
+        .comment-list { flex: 1; overflow-y: auto; padding: 14px 16px; }
+        .comment-item { margin-bottom: 12px; border-bottom: 1px solid var(--border-line); padding-bottom: 10px; }
+        .comment-user { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+        .comment-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--btn-bg); font-size: 0.7rem; display: flex; align-items: center; justify-content: center; color: var(--text-main); }
+        .comment-content { font-size: 0.85rem; color: var(--text-main); margin-top: 3px; }
+    </style>
+</head>
+<body>
+
+    <!-- 0. 开场加载动画 -->
+    <div id="loading-screen">
+        <div class="umbrella-wrapper">
+            <div class="drop drop-1"></div><div class="drop drop-2"></div><div class="drop drop-3"></div>
+            <svg class="umbrella-icon" viewBox="0 0 24 24"><path d="M12 2v2M12 4a9 9 0 0 1 9 9H3a9 9 0 0 1 9-9zM12 13v7a2 2 0 0 0 2 2h0" /></svg>
+        </div>
+        <div class="loading-text">下雨时的阴雨天<br>是个与char一起看小说的好日子^^</div>
+        <div class="loading-subtext">· 耳机のchar一起看小说 ·</div>
+    </div>
+
+    <!-- ================= 页面 1：首页书架 (page-home) ================= -->
+    <div class="page-view active" id="page-home">
+        <header class="page-header">
+            <button class="nav-btn" id="btn-open-menu" title="菜单"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+            <div class="page-title">雨天陪看</div>
+            <button class="nav-btn" id="btn-open-import" title="导入小说"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        </header>
+        <div class="main-container">
+            <aside class="category-sidebar">
+                <button class="category-add-btn" id="btn-add-category">
+                    <svg class="svg-icon" style="width:14px;height:14px" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>创建分组</span>
+                </button>
+                <div id="category-list-container">
+                    <div class="category-item active" data-cat-id="all">首页</div>
+                </div>
+            </aside>
+            <section class="bookshelf-view" id="bookshelf-grid"></section>
+        </div>
+    </div>
+
+    <!-- 左侧半屏抽屉菜单 -->
+    <div class="sidebar-drawer" id="sidebar-drawer">
+        <div class="drawer-item" data-goto="page-api-config"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>API配置</div>
+        <div class="drawer-item" data-goto="page-char-manage"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>char人设</div>
+        <div class="drawer-item" data-goto="page-user-manage"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-3-3.87"/><path d="M7 23v-2a4 4 0 0 1 3-3.87"/><circle cx="9" cy="7" r="4"/></svg>user人设</div>
+        <div class="drawer-item" data-goto="page-worldbook-manage"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>世界书</div>
+        <div class="drawer-item" data-goto="page-notice"><svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>公告</div>
+        <div class="drawer-item" data-goto="page-data-save"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>数据保存</div>
+    </div>
+
+    <!-- ================= 页面 2：API 配置 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-api-config">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">API 配置</div>
+            <div style="width:32px;"></div>
+        </header>
+        <div class="page-content">
+            <div class="form-group"><label class="form-label">apiURL:</label><input type="text" class="form-input" id="api-url" placeholder="https://api.openai.com/v1"></div>
+            <div class="form-group"><label class="form-label">key:</label><input type="password" class="form-input" id="api-key" placeholder="sk-..."></div>
+            <button class="btn-primary" id="btn-fetch-models" style="margin-bottom:12px;">拉取模型</button>
+            <div class="form-group"><label class="form-label">选择模型:</label><select class="form-select" id="api-model-select"><option value="">请先点击拉取模型</option></select></div>
+            <div class="form-group"><label class="form-label">模型温度 (0.0 - 2.0): <span id="api-temp-val">0.7</span></label><input type="range" id="api-temp" min="0" max="2" step="0.1" value="0.7" style="width:100%;"></div>
+            <button class="btn-primary" id="btn-save-api-config" style="margin-bottom:10px;">保存配置</button>
+            <button class="btn-primary" id="btn-save-api-preset" style="background:transparent; border-style:dashed;">保存为 API 预设</button>
+        </div>
+    </div>
+
+    <!-- ================= 页面 3：Char 人设 (左上角返回，右上角人设库) ================= -->
+    <div class="page-view" id="page-char-manage">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">char人设</div>
+            <button class="nav-btn" id="btn-go-char-lib" title="人设库"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        </header>
+        <div class="page-content">
+            <div style="display:flex; gap:12px; margin-bottom:14px;">
+                <div class="click-upload-trigger" id="box-char-avatar" style="width:84px; height:84px; padding:0; overflow:hidden;">
+                    <span id="char-avatar-tip" style="font-size:0.75rem;">点击选头像</span>
+                    <img id="img-char-avatar-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
+                    <input type="file" id="file-char-avatar" accept="image/*" style="display:none;">
+                </div>
+                <div style="flex:1;">
+                    <label class="form-label">char名字:</label>
+                    <input type="text" class="form-input" id="input-char-name" placeholder="角色名字">
+                </div>
+            </div>
+            <div class="form-group"><label class="form-label">char设定:</label><textarea class="form-textarea" id="input-char-desc" rows="4" placeholder="角色设定、性格、与User的关系..."></textarea></div>
+            <div class="form-group">
+                <label class="form-label">导入人设文件:</label>
+                <div class="click-upload-trigger" id="trigger-char-file">
+                    <span id="char-file-text">点击选择导入人设 (酒馆卡PNG / JSON / TXT)</span>
+                    <input type="file" id="file-char-import" accept=".png,.json,.txt,.docx" style="display:none;">
+                </div>
+            </div>
+            <button class="btn-primary" id="btn-save-char-item">保存 char 设定</button>
+        </div>
+    </div>
+
+    <!-- ================= 页面 4：Char 人设库 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-char-library">
+        <header class="page-header">
+            <button class="nav-btn btn-back-char-manage" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">char人设库</div>
+            <div style="display:flex; gap:6px;">
+                <button class="nav-btn" id="btn-char-multidel" title="多选删除"><svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                <button class="nav-btn" id="btn-char-modify" title="修改"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            </div>
+        </header>
+        <div class="page-content"><div class="persona-grid-5" id="char-library-grid"></div></div>
+    </div>
+
+    <!-- ================= 页面 5：User 人设 (左上角返回，右上角人设库) ================= -->
+    <div class="page-view" id="page-user-manage">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">user人设</div>
+            <button class="nav-btn" id="btn-go-user-lib" title="人设库"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+        </header>
+        <div class="page-content">
+            <div style="display:flex; gap:12px; margin-bottom:14px;">
+                <div class="click-upload-trigger" id="box-user-avatar" style="width:84px; height:84px; padding:0; overflow:hidden;">
+                    <span id="user-avatar-tip" style="font-size:0.75rem;">点击选头像</span>
+                    <img id="img-user-avatar-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
+                    <input type="file" id="file-user-avatar" accept="image/*" style="display:none;">
+                </div>
+                <div style="flex:1;">
+                    <label class="form-label">user名字:</label>
+                    <input type="text" class="form-input" id="input-user-name" placeholder="你的名字">
+                    <label class="form-label" style="margin-top:6px;">［关联char］:</label>
+                    <select class="form-select" id="select-user-rel-char"><option value="">未关联</option></select>
+                </div>
+            </div>
+            <div class="form-group"><label class="form-label">user设定:</label><textarea class="form-textarea" id="input-user-desc" rows="4" placeholder="描述你的性格、外貌、偏好..."></textarea></div>
+            <div class="form-group">
+                <label class="form-label">导入人设文件:</label>
+                <div class="click-upload-trigger" id="trigger-user-file">
+                    <span id="user-file-text">点击选择导入人设 (TXT / JSON)</span>
+                    <input type="file" id="file-user-import" style="display:none;">
+                </div>
+            </div>
+            <button class="btn-primary" id="btn-save-user-item">保存 user 设定</button>
+        </div>
+    </div>
+
+    <!-- ================= 页面 6：User 人设库 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-user-library">
+        <header class="page-header">
+            <button class="nav-btn btn-back-user-manage" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">user人设库</div>
+            <div style="display:flex; gap:6px;">
+                <button class="nav-btn" id="btn-user-multidel" title="多选删除"><svg class="svg-icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+                <button class="nav-btn" id="btn-user-modify" title="修改"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            </div>
+        </header>
+        <div class="page-content"><div class="persona-grid-4" id="user-library-grid"></div></div>
+    </div>
+
+    <!-- ================= 页面 7：世界书全新大页面 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-worldbook-manage">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">世界书</div>
+            <div style="display:flex; gap:6px;">
+                <button class="nav-btn" id="btn-wb-create-group" title="创建分组"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+                <button class="nav-btn" id="btn-wb-add-entry" title="添加世界书"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+            </div>
+        </header>
+        <div class="page-content">
+            <div id="wb-entries-container"></div>
+        </div>
+    </div>
+
+    <!-- ================= 页面 8：功能解析与使用教程 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-notice">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">功能解析与使用教程</div>
+            <div style="width:32px;"></div>
+        </header>
+        <div class="page-content" style="line-height:1.6; font-size:0.85rem; color:var(--text-main); padding-bottom:30px;">
+            
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.92rem; margin-bottom:4px;">🌧️ 序言 · 声明</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.5;">
+                    此小功能是个与 Char 一起看小说的。禁止二传倒卖，如发现有二传倒卖的，请联系耳机进行举报。
+                </div>
+            </div>
+
+            <!-- 教程 1 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">📖 1. 小说导入与书架管理</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • <b>导入小说</b>：首页右上角点击「+」，输入书名、作者，支持选择封面（不选则自动以书名生成极简封面），点击导入 TXT 文件。<br>
+                    • <b>超大长篇自动分章</b>：支持几百万字小说分段处理（选择字数智能分卷并实时展示进度条），杜绝卡顿死锁。<br>
+                    • <b>分组与长按管理</b>：左侧栏可点击「创建分组」；长按任意书籍可弹出菜单进行「移动分组」或「删除小说」。
+                </div>
+            </div>
+
+            <!-- 教程 2 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">👤 2. Char 与 User 人设库</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • <b>Char 人设</b>：左侧抽屉进入，支持手动填写性格与恋人关系，或直接导入<b>酒馆卡 PNG / JSON / TXT</b>，自动解析人设。右上角「小房子」图标进入人设库（一排 5 个卡片，支持多选批量删除与修改）。<br>
+                    • <b>User 人设</b>：填写你的名字与性格，并选择「关联 Char」，右上角小房子进入人设库（一排 4 个卡片，标明关联伴侣）。
+                </div>
+            </div>
+
+            <!-- 教程 3 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">🌐 3. API 配置与世界书设定</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • <b>API 配置</b>：输入接口 URL 与 Key，点击「拉取模型」即可下拉选取模型，支持温度调节（0~2）及「保存为 API 预设」。<br>
+                    • <b>世界书管理</b>：需先在右上角创建分组，再创建世界书条目。阅读时绑定后，AI 将自动融合世界书设定进行剧情互动。
+                </div>
+            </div>
+
+            <!-- 教程 4 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">📱 4. 阅读器与伴读设定</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • <b>顶栏/底栏呼出</b>：点击正文区域或上下箭头可随时折叠/展开控制栏。<br>
+                    • <b>模式切换</b>：顶栏支持「翻页阅读」与「长文下滑」一键切换，自带章节目录选择。<br>
+                    • <b>伴侣选择</b>：底栏第一个图标「爱心」选择陪同看书的 Char 与 User，确认是否开启世界书。绑定后再次点击可随时开关世界书条目或重新选择伴侣。<br>
+                    • <b>阅读定制（齿轮）</b>：支持导入背景壁纸、0~100% 模糊度调整（防白边设计）、一键「清除壁纸」、字号微调/键盘输入、调色盘改色、字体文件/URL 导入。
+                </div>
+            </div>
+
+            <!-- 教程 5 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">💬 5. 划线段评与 AI 多轮互动</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • <b>剧情划线讨论</b>：选中正文文字长按，再点一起即可弹出气泡「与char聊聊这段剧情」，即可进入段评区。<br>
+                    • <b>恋人纯对白回应</b>：发送段评后，Char 会在正下方以恋人视角进行真诚/吐槽回复（严格禁用生硬的动作括号描写）。<br>
+                    • <b>多轮上下文连贯对话</b>：点击 Char 回复下方的「回复」按钮，即可针对 Char 的观点继续追问互怼，AI 会完整读取前文多轮对话历史！<br>
+                    • <b>⭐ 五角星真实书粉讨论</b>：点击右上角五角星，AI 将根据本段小说剧情实时生成带真实网名、长短评、梗评与楼中楼互动的路人段评。回复路人后，路人也会结合你的话继续回帖！<br>
+                    • <b>段落角标</b>：关闭段评弹窗后，对应段落末尾会显示数字角标，点击即可随时重温讨论。
+                </div>
+            </div>
+
+            <!-- 教程 6 -->
+            <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px 14px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.88rem; margin-bottom:6px;">💾 6. 数据备份与跨设备互通</div>
+                <div style="color:var(--text-sub); font-size:0.8rem; line-height:1.6;">
+                    • 在侧边栏「数据保存」页面，点击「导出数据备份 (JSON)」可一键导出所有小说进度、人设、世界书与段评记录。<br>
+                    • 更换手机、平板或浏览器时，只需导入该 JSON 文件即可实现无损数据迁移与互通。
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ================= 页面 9：数据保存与互通 (统一左上角返回，浅灰按键，无原生黑边框) ================= -->
+    <div class="page-view" id="page-data-save">
+        <header class="page-header">
+            <button class="nav-btn btn-back-home" title="返回"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div class="page-title">数据保存与互通</div>
+            <div style="width:32px;"></div>
+        </header>
+        <div class="page-content">
+            <p style="font-size:0.84rem; color:var(--text-sub); line-height:1.6; margin-bottom:16px;">支持导出全量 JSON 备份，可在任何浏览器或新设备一键还原，实现浏览器与设备互通：</p>
+            <button class="btn-primary" id="btn-export-full-data" style="margin-bottom:14px;">导出数据备份 (JSON)</button>
+            
+            <div class="form-group">
+                <label class="form-label">导入并覆盖恢复备份:</label>
+                <div class="click-upload-trigger" id="trigger-import-data">
+                    <span id="data-file-tip">点击选择备份文件恢复 (JSON)</span>
+                    <input type="file" id="file-import-data" accept=".json" style="display:none;">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 页面 10：小说阅读器 (统一左上角返回) ================= -->
+    <div class="page-view" id="page-reader">
+        <div id="reader-bg-layer" style="position:absolute; inset:-30px; z-index:0; background-size:cover; background-position:center; filter:blur(0px); -webkit-transform:translate3d(0,0,0); transform:translate3d(0,0,0); will-change:filter; pointer-events:none;"></div>
+        <div class="reader-toggle-trigger trigger-top" id="btn-trigger-top"><svg class="svg-icon" style="width:14px;height:14px" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></div>
+        <header class="reader-bar reader-header" id="reader-header">
+            <button class="nav-btn" id="btn-close-reader"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+            <div id="reader-book-title" style="font-size:0.88rem; font-weight:500;">章节标题</div>
+            <div style="display:flex; gap:6px;">
+                <button class="nav-btn" id="btn-toggle-read-mode" title="切换模式"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
+                <button class="nav-btn" id="btn-select-chapter" title="章节目录"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+            </div>
+        </header>
+
+        <main class="reader-body" id="reader-content-body"></main>
+
+        <div class="reader-toggle-trigger trigger-bottom" id="btn-trigger-bottom"><svg class="svg-icon" style="width:14px;height:14px" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <footer class="reader-bar reader-footer" id="reader-footer">
+            <button class="nav-btn" id="btn-reader-char" title="陪同Char"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></button>
+            <button class="nav-btn" id="btn-reader-api" title="API切换"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></button>
+            <button class="nav-btn" id="btn-reader-theme" title="日夜模式"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+            <button class="nav-btn" id="btn-reader-settings" title="阅读设置"><svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+        </footer>
+    </div>
+
+    <!-- 弹窗：选择分章规格与字数预算 -->
+    <div class="modal-overlay" id="modal-split-options" style="z-index: 1500;">
+        <div class="modal-box" style="max-width: 360px;">
+            <div class="modal-header">
+                <div class="modal-title">小说分章设置</div>
+                <button class="modal-close" id="btn-close-split-opt"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+            </div>
+            
+            <div style="background: var(--bg-hover); padding: 10px 12px; border-radius: var(--radius-m); font-size: 0.84rem; color: var(--text-main); margin-bottom: 14px;">
+                本书总字数：<b id="split-total-wan" style="font-size: 1rem;">0</b> 万字 (<span id="split-total-chars" style="color: var(--text-sub);">0</span> 字)
+            </div>
+
+            <div class="form-group" style="font-size: 0.85rem; color: var(--text-main);">
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer;">
+                    <input type="radio" name="split-size-opt" value="5200"> 5200 字分章
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer;">
+                    <input type="radio" name="split-size-opt" value="12000" checked> 1.2 万字分章 (推荐)
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer;">
+                    <input type="radio" name="split-size-opt" value="50000"> 5 万字分章
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer;">
+                    <input type="radio" name="split-size-opt" value="200000"> 20 万字分章
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="radio" name="split-size-opt" value="custom"> 自定义字数分章
+                </label>
+            </div>
+
+            <!-- 自定义字数输入框 -->
+            <div id="split-custom-input-box" style="display:none; margin-bottom:14px;">
+                <input type="number" class="form-input" id="input-custom-split-size" placeholder="请输入每章字数 (如: 8000)" value="8000">
+            </div>
+
+            <div style="background: var(--bg-card); border: 1px dashed var(--btn-border); padding: 10px 12px; border-radius: var(--radius-m); font-size: 0.82rem; color: var(--text-main); margin-bottom: 12px; text-align: center;">
+                预计将拆分为：<b id="split-preview-chapters" style="font-size: 1.1rem; color: var(--text-main);">0</b> 章/卷
+            </div>
+
+            <button class="btn-primary" id="btn-confirm-start-parse">确认分章并载入书架</button>
+        </div>
+    </div>
+    <div class="modal-overlay" id="modal-parse-progress" style="z-index: 2000;">
+        <div class="modal-box" style="text-align: center; max-width: 300px;">
+            <div class="modal-title" style="margin-bottom: 12px;">正在解析超长篇小说</div>
+            <div id="parse-progress-text" style="font-size: 0.85rem; color: var(--text-main); margin-bottom: 12px;">正在准备分章...</div>
+            <div style="width: 100%; height: 6px; background: var(--btn-bg); border-radius: 3px; overflow: hidden;">
+                <div id="parse-progress-bar" style="width: 0%; height: 100%; background: var(--text-main); transition: width 0.1s;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗：导入小说 -->
+    <div class="modal-overlay" id="modal-import-book">
+        <div class="modal-box">
+            <div class="modal-header"><div class="modal-title">导入小说</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+            <div class="form-group"><label class="form-label">小说名字:</label><input type="text" class="form-input" id="import-title" placeholder="请输入小说名称"></div>
+            <div class="form-group"><label class="form-label">作者:</label><input type="text" class="form-input" id="import-author" placeholder="请输入作者名字"></div>
+            <div class="form-group">
+                <label class="form-label">书籍封面 (可选):</label>
+                <div class="click-upload-trigger" id="box-upload-cover">
+                    <span id="cover-text-tip">点击选择封面图片 (PNG/JPG)</span>
+                    <input type="file" id="file-cover" accept="image/*" style="display:none;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">小说文件:</label>
+                <div class="click-upload-trigger" id="box-upload-txt">
+                    <span id="txt-file-tip">导入小说 TXT 文件</span>
+                    <input type="file" id="file-txt" accept=".txt" style="display:none;">
+                </div>
+            </div>
+            <button class="btn-primary" id="btn-save-book">保存并生成书籍</button>
+        </div>
+    </div>
+
+    <!-- 弹窗：修改角色卡 -->
+    <div class="modal-overlay" id="modal-edit-char">
+        <div class="modal-box">
+            <div class="modal-header"><div class="modal-title">修改角色卡</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+            <div style="display:flex; flex-direction:column; align-items:center; margin-bottom:12px;">
+                <div class="persona-avatar" id="edit-char-avatar-preview" style="width:56px; height:56px; font-size:1.3rem;">C</div>
+                <input type="file" id="edit-char-file-avatar" accept="image/*" style="display:none;">
+                <span style="font-size:0.75rem; color:var(--text-sub); cursor:pointer; margin-top:4px;" id="btn-change-edit-avatar">点击更换头像</span>
+            </div>
+            <div class="form-group"><label class="form-label">名字:</label><input type="text" class="form-input" id="edit-char-name"></div>
+            <div class="form-group"><label class="form-label">人设设定:</label><textarea class="form-textarea" id="edit-char-desc" rows="4"></textarea></div>
+            <button class="btn-primary" id="btn-confirm-save-char-edit">保存修改</button>
+        </div>
+    </div>
+
+    <!-- 阅读器齿轮设置面板 -->
+    <div class="bottom-sheet" id="sheet-reader-settings">
+        <div class="modal-header"><div class="modal-title">阅读设置</div><button class="modal-close" id="btn-close-reader-settings"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+        <div class="form-group">
+            <label class="form-label">导入背景壁纸:</label>
+            <div style="display:flex; gap:8px;">
+                <div class="click-upload-trigger" id="trigger-bg-upload" style="flex:1;">
+                    <span id="bg-file-tip">点击选择壁纸 (PNG/JPG)</span>
+                    <input type="file" id="bg-wallpaper-input" accept="image/*" style="display:none;">
+                </div>
+                <button class="btn-primary" id="btn-clear-wallpaper" style="width:auto; padding:0 12px; margin-top:0; white-space:nowrap; font-size:0.8rem;">清除壁纸</button>
+            </div>
+        </div>
+        <div class="form-group"><label class="form-label">壁纸模糊程度 (0-100%)</label><input type="range" id="bg-blur-slider" min="0" max="100" value="0" style="width:100%;"></div>
+        <div class="form-group"><label class="form-label">字体大小调整</label>
+            <div class="number-picker"><button class="number-btn" id="btn-font-sub">-</button><input type="number" class="number-input" id="input-font-size" value="17"><button class="number-btn" id="btn-font-add">+</button></div>
+        </div>
+        <div class="form-group"><label class="form-label">改变字体颜色</label><input type="color" id="input-font-color" value="#38322B" style="border:none; width:36px; height:36px; cursor:pointer;"></div>
+        <div class="form-group">
+            <label class="form-label">字体导入:</label>
+            <input type="text" class="form-input" id="input-font-url" placeholder="填入字体 URL" style="margin-bottom:6px;">
+            <div class="click-upload-trigger" id="trigger-font-file">
+                <span id="font-file-tip">点击导入本地字体文件</span>
+                <input type="file" id="input-font-file" accept=".ttf,.otf,.woff,.woff2" style="display:none;">
+            </div>
+        </div>
+        <button class="btn-primary" id="btn-save-reader-settings">保存设置</button>
+    </div>
+
+    <!-- 段评评论区 Drawer -->
+    <div class="comment-drawer" id="drawer-comments">
+        <div class="modal-header" style="padding:14px 16px 8px 16px;">
+            <div class="modal-title" style="display:flex; align-items:center; gap:6px; font-size:0.95rem;">
+                段评评论区
+                <button class="nav-btn" id="btn-magic-wand" title="生成真实路人段评">
+                    <!-- 五角星矢量图标 -->
+                    <svg class="svg-icon" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                </button>
+            </div>
+            <button class="modal-close" id="btn-close-comments"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div id="comment-quote-header" style="font-size:0.75rem; color:var(--text-sub); padding:6px 16px; border-bottom:1px dashed var(--border-line); background:var(--bg-hover); line-height:1.4;"></div>
+        <div id="comment-loading-bar" style="display:none; padding:8px 16px; font-size:0.75rem; color:var(--text-sub); text-align:center; background:var(--bg-main); border-bottom:1px solid var(--border-line);">
+            正在生成真实书粉讨论中...
+        </div>
+        <div class="comment-list" id="comment-list-container"></div>
+        <div style="padding:10px 16px; border-top:1px solid var(--border-line); display:flex; gap:6px; background:var(--bg-card); align-items:center;">
+            <input type="text" class="form-input" id="comment-input" placeholder="发表对这段剧情的看法..." style="flex:1;">
+            <button class="nav-btn" id="btn-send-comment" style="background:var(--btn-bg); border:1px solid var(--btn-border); border-radius:var(--radius-m); padding:8px 14px;"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        </div>
+    </div>
+
+    <!-- ================= 7. JavaScript 系统核心逻辑 ================= -->
+    <script>
+        function showToast(msg) {
+            let toast = document.createElement('div');
+            toast.innerText = msg;
+            toast.style.cssText = `
+                position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+                background: rgba(56, 50, 43, 0.9); color: #FFF; padding: 8px 16px;
+                border-radius: 18px; font-size: 0.82rem; z-index: 10000;
+                backdrop-filter: blur(4px); pointer-events: none; opacity: 0;
+                transition: opacity 0.3s ease;
+            `;
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => toast.style.opacity = '1');
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 1800);
+        }
+
+        function navigateTo(pageId) {
+            document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+            const target = document.getElementById(pageId);
+            if (target) target.classList.add('active');
+        }
+
+        /* 1. IndexedDB 强持久化引擎 */
+        class DBManager {
+            constructor() { this.dbName = 'RainyNovelDB'; this.version = 1; this.db = null; }
+            async init() {
+                return new Promise((resolve) => {
+                    const req = indexedDB.open(this.dbName, this.version);
+                    req.onsuccess = (e) => { this.db = e.target.result; resolve(this.db); };
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        ['books', 'categories', 'chars', 'users', 'worldbooks', 'apiPresets', 'comments'].forEach(s => {
+                            if (!db.objectStoreNames.contains(s)) db.createObjectStore(s, { keyPath: 'id' });
+                        });
+                        if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+                    };
+                });
+            }
+            async saveItem(store, item) {
+                return new Promise((res) => {
+                    const tx = this.db.transaction(store, 'readwrite');
+                    tx.objectStore(store).put(item).onsuccess = () => res(true);
+                });
+            }
+            async getAllItems(store) {
+                return new Promise((res) => {
+                    const tx = this.db.transaction(store, 'readonly');
+                    tx.objectStore(store).getAll().onsuccess = (e) => res(e.target.result || []);
+                });
+            }
+            async getItem(store, key) {
+                return new Promise((res) => {
+                    const tx = this.db.transaction(store, 'readonly');
+                    tx.objectStore(store).get(key).onsuccess = (e) => res(e.target.result);
+                });
+            }
+            async deleteItem(store, key) {
+                return new Promise((res) => {
+                    const tx = this.db.transaction(store, 'readwrite');
+                    tx.objectStore(store).delete(key).onsuccess = () => res(true);
+                });
+            }
+        }
+        const dbManager = new DBManager();
+
+        /* 2. 解析器 (TXT 分章 & 酒馆卡解析) */
+        const Parsers = {
+            readTextFile(file) {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const buffer = e.target.result;
+                        let text = "";
+                        try {
+                            text = new TextDecoder('utf-8', { fatal: true }).decode(buffer);
+                        } catch (err) {
+                            try {
+                                text = new TextDecoder('gb18030').decode(buffer);
+                            } catch (e2) {
+                                text = new TextDecoder('utf-8').decode(buffer);
+                            }
+                        }
+                        resolve(text);
+                    };
+                    reader.onerror = () => resolve("");
+                    reader.readAsArrayBuffer(file);
+                });
+            },
+
+            async parseLargeTxtToChapters(textContent, chunkSize, onProgress) {
+                if (!textContent) return [];
+                const cleanText = textContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                const totalLen = cleanText.length;
+                const targetChunkSize = parseInt(chunkSize) || 12000; // 默认1.2万字
+                const chapters = [];
+
+                let startIndex = 0;
+                let chapterIndex = 1;
+
+                while (startIndex < totalLen) {
+                    let endIndex = startIndex + targetChunkSize;
+                    if (endIndex >= totalLen) {
+                        endIndex = totalLen;
+                    } else {
+                        // 寻找最近换行符切断，避免句子被生硬劈开
+                        const nextNewline = cleanText.indexOf('\n', endIndex);
+                        if (nextNewline !== -1 && (nextNewline - endIndex < 1500)) {
+                            endIndex = nextNewline + 1;
+                        }
+                    }
+
+                    const chunkRaw = cleanText.substring(startIndex, endIndex);
+                    const lines = chunkRaw.split('\n').map(l => l.trim()).filter(Boolean);
+                    
+                    const wordCountWan = (chunkRaw.length / 10000).toFixed(1);
+                    const titleWordStr = chunkRaw.length >= 10000 ? `${wordCountWan} 万字` : `${chunkRaw.length} 字`;
+                    
+                    chapters.push({
+                        title: `第 ${chapterIndex} 章/卷 (约 ${titleWordStr})`,
+                        content: lines
+                    });
+
+                    startIndex = endIndex;
+                    chapterIndex++;
+
+                    if (onProgress) {
+                        const percent = Math.min(100, Math.round((startIndex / totalLen) * 100));
+                        const parsedWan = (startIndex / 10000).toFixed(1);
+                        onProgress(chapterIndex - 1, parsedWan, percent);
+                        await new Promise(r => setTimeout(r, 12));
+                    }
+                }
+
+                return chapters;
+            },
+            async parseTavernPngCard(file) {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.readAsArrayBuffer(file);
+                    reader.onload = async (e) => {
+                        try {
+                            const buffer = e.target.result; const view = new DataView(buffer);
+                            let offset = 8; let charaRaw = null;
+                            while (offset < view.byteLength) {
+                                const length = view.getUint32(offset);
+                                const type = String.fromCharCode(view.getUint8(offset+4), view.getUint8(offset+5), view.getUint8(offset+6), view.getUint8(offset+7));
+                                if (type === 'tEXt') {
+                                    const text = new TextDecoder('utf-8').decode(new Uint8Array(buffer, offset + 8, length));
+                                    if (text.startsWith('chara\0') || text.startsWith('ccv2\0')) {
+                                        charaRaw = atob(text.substring(text.indexOf('\0') + 1));
+                                        charaRaw = new TextDecoder('utf-8').decode(Uint8Array.from(charaRaw, c => c.charCodeAt(0)));
+                                        break;
+                                    }
+                                }
+                                offset += 12 + length;
+                            }
+                            const avatar = await this.fileToDataURL(file);
+                            if (charaRaw) {
+                                const json = JSON.parse(charaRaw); const d = json.data || json;
+                                const desc = [d.description ? `【人设】\n${d.description}` : '', d.personality ? `【性格】\n${d.personality}` : '', d.first_mes ? `【首对白】\n${d.first_mes}` : ''].filter(Boolean).join('\n\n');
+                                resolve({ name: d.name || '未命名', description: desc, avatar });
+                            } else resolve({ name: file.name.replace(/\.[^/.]+$/, ""), description: '', avatar });
+                        } catch (err) {
+                            const avatar = await this.fileToDataURL(file);
+                            resolve({ name: file.name.replace(/\.[^/.]+$/, ""), description: '', avatar });
+                        }
+                    };
+                });
+            },
+            fileToDataURL(file) {
+                return new Promise((res) => {
+                    const r = new FileReader(); r.onload = (e) => res(e.target.result); r.readAsDataURL(file);
+                });
+            }
+        };
+
+        /* 3. AppController (主控系统) */
+        class AppController {
+            constructor() {
+                this.currentCategory = 'all';
+                this.currentBook = null;
+                this.currentChapterIndex = 0;
+                this.readMode = 'page';
+                this.activeChar = null;
+                this.activeUser = null;
+                this.activeWorldbooks = [];
+            }
+            async init() {
+                await dbManager.init();
+                setTimeout(() => {
+                    const ls = document.getElementById('loading-screen');
+                    if (ls) { ls.style.opacity = '0'; setTimeout(() => ls.style.display = 'none', 600); }
+                }, 800);
+
+                await this.loadCategories();
+                await this.loadBookshelf();
+                await this.loadGlobalSettings();
+                this.bindEvents();
+            }
+            async loadCategories() {
+                const categories = await dbManager.getAllItems('categories');
+                const container = document.getElementById('category-list-container');
+                container.innerHTML = `<div class="category-item ${this.currentCategory === 'all' ? 'active' : ''}" data-cat-id="all">首页</div>`;
+                categories.forEach(cat => {
+                    container.innerHTML += `<div class="category-item ${this.currentCategory === cat.id ? 'active' : ''}" data-cat-id="${cat.id}">${cat.name}</div>`;
+                });
+            }
+            async loadBookshelf() {
+                const books = await dbManager.getAllItems('books');
+                const grid = document.getElementById('bookshelf-grid');
+                grid.innerHTML = '';
+                const filtered = this.currentCategory === 'all' ? books : books.filter(b => b.categoryId === this.currentCategory);
+                if (filtered.length === 0) {
+                    grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; color:var(--text-sub); margin-top:40px; font-size:0.82rem;">书架空空如也，点击右上角加号导入小说吧^^</div>`;
+                    return;
+                }
+                filtered.forEach(book => {
+                    const card = document.createElement('div');
+                    card.className = 'book-card';
+                    const coverHTML = book.cover ? `<img src="${book.cover}">` : `<div class="book-cover-text">${book.title}</div>`;
+                    card.innerHTML = `<div class="book-cover">${coverHTML}</div><div class="book-title">${book.title}</div><div class="book-author">${book.author || '未知作者'}</div>`;
+                    
+                    let touchStartTime = 0;
+                    let isLongPress = false;
+                    let timer = null;
+                    let startX = 0, startY = 0;
+
+                    // 手机触屏点击与长按精准分离
+                    card.addEventListener('touchstart', (e) => {
+                        touchStartTime = Date.now();
+                        isLongPress = false;
+                        startX = e.touches[0].clientX;
+                        startY = e.touches[0].clientY;
+                        timer = setTimeout(() => {
+                            isLongPress = true;
+                            this.showBookOptionsModal(book);
+                        }, 600);
+                    }, { passive: true });
+
+                    card.addEventListener('touchmove', (e) => {
+                        if (Math.abs(e.touches[0].clientX - startX) > 10 || Math.abs(e.touches[0].clientY - startY) > 10) {
+                            clearTimeout(timer);
+                        }
+                    }, { passive: true });
+
+                    card.addEventListener('touchend', (e) => {
+                        clearTimeout(timer);
+                        if (!isLongPress && (Date.now() - touchStartTime < 450)) {
+                            this.openReader(book.id);
+                        }
+                    });
+
+                    // 电脑端点击兼容
+                    card.addEventListener('click', () => {
+                        if (!('ontouchstart' in window)) {
+                            this.openReader(book.id);
+                        }
+                    });
+
+                    grid.appendChild(card);
+                });
+            }
+            bindBookLongPress(el, book) {
+                let timer = null;
+                const start = () => timer = setTimeout(() => this.showBookOptionsModal(book), 700);
+                const cancel = () => { if (timer) clearTimeout(timer); };
+                el.addEventListener('touchstart', start, { passive: true });
+                el.addEventListener('touchend', cancel);
+                el.addEventListener('mousedown', start);
+                el.addEventListener('mouseup', cancel);
+            }
+            async showBookOptionsModal(book) {
+                const categories = await dbManager.getAllItems('categories');
+                const options = categories.map(c => `<option value="${c.id}" ${book.categoryId === c.id ? 'selected' : ''}>${c.name}</option>`).join('');
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay'; modal.style.display = 'flex';
+                modal.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header"><div class="modal-title">管理《${book.title}》</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                        <div class="form-group"><label class="form-label">移动到分组:</label><select class="form-select" id="select-move-category"><option value="all">未分类 (首页)</option>${options}</select></div>
+                        <button class="btn-primary" id="btn-confirm-move">保存移动</button>
+                        <button class="btn-primary" id="btn-delete-book" style="margin-top:8px;">删除小说</button>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.querySelector('.modal-close').onclick = () => modal.remove();
+                modal.querySelector('#btn-confirm-move').onclick = async () => {
+                    book.categoryId = modal.querySelector('#select-move-category').value;
+                    await dbManager.saveItem('books', book);
+                    showToast('已移动分组'); modal.remove(); this.loadBookshelf();
+                };
+                modal.querySelector('#btn-delete-book').onclick = async () => {
+                    if (confirm(`确定删除《${book.title}》？`)) { await dbManager.deleteItem('books', book.id); modal.remove(); this.loadBookshelf(); }
+                };
+            }
+            async openReader(bookId) {
+                try {
+                    this.currentBook = await dbManager.getItem('books', bookId);
+                    if (!this.currentBook) {
+                        showToast('未找到该书籍数据');
+                        return;
+                    }
+                    if (!this.currentBook.chapters || this.currentBook.chapters.length === 0) {
+                        showToast('该书籍内容为空，请重新导入 TXT');
+                        return;
+                    }
+                    this.currentChapterIndex = this.currentBook.lastReadChapterIndex || 0;
+                    if (this.currentChapterIndex >= this.currentBook.chapters.length) {
+                        this.currentChapterIndex = 0;
+                    }
+                    navigateTo('page-reader');
+                    this.renderChapterContent();
+                } catch (err) {
+                    console.error('打开小说失败:', err);
+                    showToast('打开失败: ' + err.message);
+                }
+            }
+            async renderChapterContent() {
+                const chapter = this.currentBook.chapters[this.currentChapterIndex];
+                if (!chapter) return;
+                document.getElementById('reader-book-title').innerText = chapter.title;
+                const body = document.getElementById('reader-content-body');
+                body.innerHTML = '';
+
+                const allComments = await dbManager.getAllItems('comments');
+                const commentMap = {};
+                allComments.forEach(c => { if (c && c.id) commentMap[c.id] = c; });
+
+                const fragment = document.createDocumentFragment();
+
+                chapter.content.forEach((paraText, pIdx) => {
+                    const p = document.createElement('p');
+                    p.className = 'reader-paragraph';
+                    p.dataset.paraIndex = pIdx;
+                    p.innerText = paraText;
+
+                    const paraId = `${this.currentBook.id}_${this.currentChapterIndex}_${pIdx}`;
+                    const commentData = commentMap[paraId];
+                    if (commentData && commentData.list && commentData.list.length > 0) {
+                        const badge = document.createElement('span');
+                        badge.className = 'comment-badge';
+                        badge.innerHTML = `<svg class="svg-icon" style="width:11px;height:11px" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${commentData.list.length}`;
+                        p.appendChild(badge);
+                    }
+                    fragment.appendChild(p);
+                });
+
+                body.appendChild(fragment);
+
+                // iOS 内存优化：统一由父容器委托监听，杜绝内存溢出
+                if (!this._hasBoundReaderEvents) {
+                    this._hasBoundReaderEvents = true;
+                    body.addEventListener('touchend', (e) => {
+                        const p = e.target.closest('p.reader-paragraph');
+                        if (p) this.handleTextSelection(p, p.innerText);
+                    });
+                    body.addEventListener('mouseup', (e) => {
+                        const p = e.target.closest('p.reader-paragraph');
+                        if (p) this.handleTextSelection(p, p.innerText);
+                    });
+                    body.addEventListener('click', (e) => {
+                        const badge = e.target.closest('.comment-badge');
+                        if (badge) {
+                            e.stopPropagation();
+                            const p = badge.closest('p.reader-paragraph');
+                            if (p) {
+                                const pIdx = p.dataset.paraIndex;
+                                const paraId = `${this.currentBook.id}_${this.currentChapterIndex}_${pIdx}`;
+                                this.openCommentDrawer(paraId, p.innerText);
+                            }
+                        }
+                    });
+                }
+
+                this.currentBook.lastReadChapterIndex = this.currentChapterIndex;
+                dbManager.saveItem('books', this.currentBook);
+            }
+            handleTextSelection(pEl, paraText) {
+                const sel = window.getSelection(); const text = sel.toString().trim();
+                if (text.length > 0) {
+                    const existing = document.getElementById('text-action-tooltip');
+                    if (existing) existing.remove();
+                    const range = sel.getRangeAt(0); const rect = range.getBoundingClientRect();
+                    const tooltip = document.createElement('div');
+                    tooltip.id = 'text-action-tooltip';
+                    tooltip.style.cssText = `
+                        position: fixed; top: ${Math.max(10, rect.top - 45)}px; left: ${rect.left + (rect.width/2) - 80}px;
+                        background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-line);
+                        padding: 6px 12px; border-radius: 18px; font-size: 0.78rem; box-shadow: var(--shadow-soft);
+                        cursor: pointer; z-index: 1200; display: flex; align-items: center; gap: 5px;
+                    `;
+                    tooltip.innerHTML = `<svg class="svg-icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> 与char聊聊这段剧情`;
+                    tooltip.onclick = () => {
+                        tooltip.remove();
+                        const paraId = `${this.currentBook.id}_${this.currentChapterIndex}_${pEl.dataset.paraIndex}`;
+                        app.openCommentDrawer(paraId, text);
+                    };
+                    document.body.appendChild(tooltip);
+                }
+            }
+            bindEvents() {
+                document.getElementById('btn-open-menu').onclick = () => document.getElementById('sidebar-drawer').classList.add('open');
+                document.addEventListener('click', (e) => {
+                    const drawer = document.getElementById('sidebar-drawer');
+                    if (drawer.classList.contains('open') && !drawer.contains(e.target) && !document.getElementById('btn-open-menu').contains(e.target)) drawer.classList.remove('open');
+                });
+
+                document.querySelectorAll('.drawer-item').forEach(item => {
+                    item.onclick = () => {
+                        document.getElementById('sidebar-drawer').classList.remove('open');
+                        const targetPage = item.dataset.goto;
+                        if (targetPage) {
+                            if (targetPage === 'page-user-manage') managementCtrl.refreshUserRelCharSelect();
+                            if (targetPage === 'page-worldbook-manage') managementCtrl.renderWorldbookList();
+                            navigateTo(targetPage);
+                        }
+                    };
+                });
+
+                document.querySelectorAll('.btn-back-home').forEach(btn => btn.onclick = () => navigateTo('page-home'));
+
+                // 导入小说
+                const modalImp = document.getElementById('modal-import-book');
+                document.getElementById('btn-open-import').onclick = () => modalImp.style.display = 'flex';
+                modalImp.querySelector('.modal-close').onclick = () => modalImp.style.display = 'none';
+                
+                // 彻底纯文本式点击触发
+                document.getElementById('box-upload-cover').onclick = () => document.getElementById('file-cover').click();
+                document.getElementById('file-cover').onchange = (e) => {
+                    if (e.target.files[0]) document.getElementById('cover-text-tip').innerText = `已选封面: ${e.target.files[0].name}`;
+                };
+
+                document.getElementById('box-upload-txt').onclick = () => document.getElementById('file-txt').click();
+                document.getElementById('file-txt').onchange = (e) => {
+                    if (e.target.files[0]) document.getElementById('txt-file-tip').innerText = `已选小说: ${e.target.files[0].name}`;
+                };
+
+                // 缓存待导入的数据
+                let pendingImportData = null;
+
+                document.getElementById('btn-save-book').onclick = async () => {
+                    const title = document.getElementById('import-title').value.trim();
+                    const author = document.getElementById('import-author').value.trim();
+                    const txtFile = document.getElementById('file-txt').files[0];
+                    if (!title || !txtFile) { showToast('请填写小说名字并选择 TXT 文件'); return; }
+
+                    showToast('正在读取文件字数...');
+                    const rawText = await Parsers.readTextFile(txtFile);
+                    if (!rawText || rawText.length === 0) {
+                        showToast('TXT 文件内容为空或读取失败');
+                        return;
+                    }
+
+                    let cover = '';
+                    if (document.getElementById('file-cover').files[0]) {
+                        cover = await Parsers.fileToDataURL(document.getElementById('file-cover').files[0]);
+                    }
+
+                    pendingImportData = { title, author, cover, rawText };
+
+                    // 打开分章规格选择弹窗
+                    modalImp.style.display = 'none';
+                    const splitModal = document.getElementById('modal-split-options');
+                    splitModal.style.display = 'flex';
+
+                    const totalChars = rawText.length;
+                    const totalWan = (totalChars / 10000).toFixed(1);
+                    document.getElementById('split-total-wan').innerText = totalWan;
+                    document.getElementById('split-total-chars').innerText = totalChars.toLocaleString();
+
+                    // 计算并更新预计拆分章节数
+                    const updatePreviewChapters = () => {
+                        let selectedVal = document.querySelector('input[name="split-size-opt"]:checked').value;
+                        let size = selectedVal === 'custom' 
+                            ? (parseInt(document.getElementById('input-custom-split-size').value) || 12000)
+                            : parseInt(selectedVal);
+                        
+                        let estimatedChapters = Math.max(1, Math.ceil(totalChars / size));
+                        document.getElementById('split-preview-chapters').innerText = estimatedChapters;
+                    };
+
+                    updatePreviewChapters();
+
+                    // 监听选项切换
+                    document.querySelectorAll('input[name="split-size-opt"]').forEach(radio => {
+                        radio.onchange = () => {
+                            const isCustom = radio.value === 'custom';
+                            document.getElementById('split-custom-input-box').style.display = isCustom ? 'block' : 'none';
+                            updatePreviewChapters();
+                        };
+                    });
+
+                    document.getElementById('input-custom-split-size').oninput = updatePreviewChapters;
+                };
+
+                // 关闭分章选项弹窗
+                document.getElementById('btn-close-split-opt').onclick = () => {
+                    document.getElementById('modal-split-options').style.display = 'none';
+                };
+
+                // 确认分章并开始解析
+                document.getElementById('btn-confirm-start-parse').onclick = async () => {
+                    if (!pendingImportData) return;
+
+                    const splitModal = document.getElementById('modal-split-options');
+                    const progressModal = document.getElementById('modal-parse-progress');
+                    const progressText = document.getElementById('parse-progress-text');
+                    const progressBar = document.getElementById('parse-progress-bar');
+
+                    let selectedVal = document.querySelector('input[name="split-size-opt"]:checked').value;
+                    let targetChunkSize = selectedVal === 'custom' 
+                        ? (parseInt(document.getElementById('input-custom-split-size').value) || 12000)
+                        : parseInt(selectedVal);
+
+                    splitModal.style.display = 'none';
+                    progressModal.style.display = 'flex';
+                    progressBar.style.width = '0%';
+
+                    try {
+                        const chapters = await Parsers.parseLargeTxtToChapters(
+                            pendingImportData.rawText, 
+                            targetChunkSize, 
+                            (chCount, wanCount, pct) => {
+                                progressText.innerText = `正在分章：已处理至第 ${chCount} 章 (${wanCount}万字)`;
+                                progressBar.style.width = pct + '%';
+                            }
+                        );
+
+                        await dbManager.saveItem('books', {
+                            id: 'book_' + Date.now(),
+                            title: pendingImportData.title,
+                            author: pendingImportData.author || '未知作者',
+                            cover: pendingImportData.cover,
+                            chapters,
+                            categoryId: 'all',
+                            lastReadChapterIndex: 0
+                        });
+
+                        document.getElementById('import-title').value = '';
+                        document.getElementById('import-author').value = '';
+                        document.getElementById('file-txt').value = '';
+                        document.getElementById('file-cover').value = '';
+                        document.getElementById('txt-file-tip').innerText = '导入小说 TXT 文件';
+                        document.getElementById('cover-text-tip').innerText = '点击选择封面图片 (PNG/JPG)';
+
+                        pendingImportData = null;
+                        progressModal.style.display = 'none';
+                        showToast(`已成功载入书架！共分成 ${chapters.length} 卷/章`);
+                        this.loadBookshelf();
+                    } catch (err) {
+                        progressModal.style.display = 'none';
+                        showToast('导入分章失败: ' + err.message);
+                    }
+                };
+
+                document.getElementById('btn-add-category').onclick = async () => {
+                    const name = prompt('输入新分组分类名称:');
+                    if (name && name.trim()) { await dbManager.saveItem('categories', { id: 'cat_' + Date.now(), name: name.trim() }); this.loadCategories(); }
+                };
+
+                document.getElementById('category-list-container').onclick = (e) => {
+                    const item = e.target.closest('.category-item');
+                    if (item) {
+                        this.currentCategory = item.dataset.catId;
+                        document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                        item.classList.add('active'); this.loadBookshelf();
+                    }
+                };
+
+                // 阅读器交互
+                document.getElementById('reader-content-body').onclick = (e) => {
+                    if (e.target.closest('.comment-badge')) return;
+                    document.getElementById('reader-header').classList.toggle('collapsed-top');
+                    document.getElementById('reader-footer').classList.toggle('collapsed-bottom');
+                };
+                document.getElementById('btn-trigger-top').onclick = () => document.getElementById('reader-header').classList.toggle('collapsed-top');
+                document.getElementById('btn-trigger-bottom').onclick = () => document.getElementById('reader-footer').classList.toggle('collapsed-bottom');
+
+                document.getElementById('btn-close-reader').onclick = () => navigateTo('page-home');
+                document.getElementById('btn-toggle-read-mode').onclick = () => {
+                    this.readMode = this.readMode === 'page' ? 'scroll' : 'page';
+                    showToast(this.readMode === 'scroll' ? '已切换为长文下滑模式' : '已切换为翻页阅读模式');
+                };
+                document.getElementById('btn-select-chapter').onclick = () => this.showChapterSelectModal();
+
+                document.getElementById('btn-reader-theme').onclick = () => {
+                    document.body.classList.toggle('theme-night');
+                    dbManager.saveItem('settings', { key: 'themeNight', value: document.body.classList.contains('theme-night') });
+                };
+
+                const sheet = document.getElementById('sheet-reader-settings');
+                document.getElementById('btn-reader-settings').onclick = () => sheet.classList.add('open');
+                document.getElementById('btn-close-reader-settings').onclick = () => sheet.classList.remove('open');
+
+                const fontInput = document.getElementById('input-font-size');
+                document.getElementById('btn-font-sub').onclick = () => {
+                    fontInput.value = Math.max(12, parseInt(fontInput.value) - 1);
+                    document.getElementById('reader-content-body').style.fontSize = fontInput.value + 'px';
+                };
+                document.getElementById('btn-font-add').onclick = () => {
+                    fontInput.value = Math.min(36, parseInt(fontInput.value) + 1);
+                    document.getElementById('reader-content-body').style.fontSize = fontInput.value + 'px';
+                };
+                fontInput.oninput = () => document.getElementById('reader-content-body').style.fontSize = fontInput.value + 'px';
+                document.getElementById('input-font-color').oninput = (e) => document.getElementById('reader-content-body').style.color = e.target.value;
+
+                // 壁纸模糊（作用于独立图层，无白边）
+                document.getElementById('bg-blur-slider').oninput = (e) => {
+                    document.getElementById('reader-bg-layer').style.filter = `blur(${e.target.value}px)`;
+                };
+
+                document.getElementById('trigger-bg-upload').onclick = () => document.getElementById('bg-wallpaper-input').click();
+                document.getElementById('bg-wallpaper-input').onchange = async (e) => {
+                    if (e.target.files[0]) {
+                        document.getElementById('bg-file-tip').innerText = `已选壁纸: ${e.target.files[0].name}`;
+                        const url = await Parsers.fileToDataURL(e.target.files[0]);
+                        document.getElementById('reader-bg-layer').style.backgroundImage = `url(${url})`;
+                        await dbManager.saveItem('settings', { key: 'readerBgUrl', value: url });
+                    }
+                };
+
+                // 清除壁纸
+                document.getElementById('btn-clear-wallpaper').onclick = async () => {
+                    document.getElementById('reader-bg-layer').style.backgroundImage = 'none';
+                    document.getElementById('bg-wallpaper-input').value = '';
+                    document.getElementById('bg-file-tip').innerText = '点击选择壁纸 (PNG/JPG)';
+                    await dbManager.deleteItem('settings', 'readerBgUrl');
+                    showToast('已清除背景壁纸');
+                };
+
+                // 字体颜色实时生效
+                document.getElementById('input-font-color').oninput = (e) => {
+                    document.getElementById('reader-content-body').style.color = e.target.value;
+                };
+
+                document.getElementById('trigger-font-file').onclick = () => document.getElementById('input-font-file').click();
+                document.getElementById('input-font-file').onchange = (e) => {
+                    if (e.target.files[0]) document.getElementById('font-file-tip').innerText = `已选字体: ${e.target.files[0].name}`;
+                };
+
+                document.getElementById('btn-save-reader-settings').onclick = async () => {
+                    await dbManager.saveItem('settings', {
+                        key: 'readerConfig',
+                        fontSize: fontInput.value,
+                        fontColor: document.getElementById('input-font-color').value,
+                        blurVal: document.getElementById('bg-blur-slider').value
+                    });
+                    showToast('阅读设置已保存并生效'); sheet.classList.remove('open');
+                };
+            }
+            showChapterSelectModal() {
+                const modal = document.createElement('div'); modal.className = 'modal-overlay'; modal.style.display = 'flex';
+                let listHTML = this.currentBook.chapters.map((ch, idx) => `
+                    <div style="padding:10px; border-bottom:1px solid var(--border-line); cursor:pointer; font-size:0.88rem; color:${idx === this.currentChapterIndex ? 'var(--text-main); font-weight:600;' : 'var(--text-sub);'}" data-idx="${idx}">
+                        ${ch.title}
+                    </div>
+                `).join('');
+                modal.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header"><div class="modal-title">章节目录</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                        <div style="max-height:60vh; overflow-y:auto;">${listHTML}</div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                modal.querySelector('.modal-close').onclick = () => modal.remove();
+                modal.querySelectorAll('[data-idx]').forEach(el => {
+                    el.onclick = () => {
+                        this.currentChapterIndex = parseInt(el.dataset.idx);
+                        this.renderChapterContent(); modal.remove();
+                    };
+                });
+            }
+            async loadGlobalSettings() {
+                const night = await dbManager.getItem('settings', 'themeNight');
+                if (night && night.value) document.body.classList.add('theme-night');
+                const readerCfg = await dbManager.getItem('settings', 'readerConfig');
+                if (readerCfg) {
+                    if (readerCfg.fontSize) {
+                        document.getElementById('reader-content-body').style.fontSize = readerCfg.fontSize + 'px';
+                        document.getElementById('input-font-size').value = readerCfg.fontSize;
+                    }
+                    if (readerCfg.fontColor) {
+                        document.getElementById('reader-content-body').style.color = readerCfg.fontColor;
+                        document.getElementById('input-font-color').value = readerCfg.fontColor;
+                    }
+                    if (readerCfg.blurVal) {
+                        document.getElementById('bg-blur-slider').value = readerCfg.blurVal;
+                        document.getElementById('reader-bg-layer').style.filter = `blur(${readerCfg.blurVal}px)`;
+                    }
+                }
+                const bgSetting = await dbManager.getItem('settings', 'readerBgUrl');
+                if (bgSetting && bgSetting.value) {
+                    document.getElementById('reader-bg-layer').style.backgroundImage = `url(${bgSetting.value})`;
+                }
+            }
+        }
+
+        /* 4. ManagementController (API配置/Char库/User库/世界书/数据) */
+        class ManagementController {
+            constructor() {
+                this.charAvatarData = '';
+                this.userAvatarData = '';
+                this.selectedCharIds = new Set();
+                this.selectedUserIds = new Set();
+                this.editingChar = null;
+
+                this.bindApiPage();
+                this.bindCharPage();
+                this.bindUserPage();
+                this.bindWorldbookPage();
+                this.bindDataPage();
+            }
+
+            bindApiPage() {
+                const tempSlider = document.getElementById('api-temp');
+                tempSlider.oninput = (e) => document.getElementById('api-temp-val').innerText = e.target.value;
+
+                document.getElementById('btn-fetch-models').onclick = async () => {
+                    const u = document.getElementById('api-url').value.trim(); const k = document.getElementById('api-key').value.trim();
+                    if (!u || !k) { showToast('请填写 URL 和 Key！'); return; }
+                    try {
+                        const res = await fetch(`${u.replace(/\/+$/, '')}/models`, { headers: { 'Authorization': `Bearer ${k}` } });
+                        const data = await res.json();
+                        const sel = document.getElementById('api-model-select'); sel.innerHTML = '';
+                        data.data.forEach(m => sel.innerHTML += `<option value="${m.id}">${m.id}</option>`);
+                        showToast('模型拉取成功！');
+                    } catch (e) { showToast('拉取失败，请检查设置'); }
+                };
+
+                document.getElementById('btn-save-api-config').onclick = async () => {
+                    await dbManager.saveItem('settings', {
+                        key: 'apiConfig', url: document.getElementById('api-url').value.trim(),
+                        keyVal: document.getElementById('api-key').value.trim(),
+                        model: document.getElementById('api-model-select').value,
+                        temp: parseFloat(tempSlider.value)
+                    });
+                    showToast('API 配置已保存！');
+                };
+
+                document.getElementById('btn-save-api-preset').onclick = async () => {
+                    const name = prompt('请输入 API 预设名称:');
+                    if (name) {
+                        await dbManager.saveItem('apiPresets', {
+                            id: 'preset_' + Date.now(), name,
+                            url: document.getElementById('api-url').value.trim(),
+                            keyVal: document.getElementById('api-key').value.trim(),
+                            model: document.getElementById('api-model-select').value,
+                            temp: parseFloat(tempSlider.value)
+                        });
+                        showToast('API 预设已保存！');
+                    }
+                };
+
+                document.getElementById('btn-reader-api').onclick = async () => {
+                    const presets = await dbManager.getAllItems('apiPresets');
+                    const modal = document.createElement('div'); modal.className = 'modal-overlay'; modal.style.display = 'flex';
+                    let listHTML = presets.map(p => `
+                        <div style="padding:10px; border-bottom:1px solid var(--border-line); cursor:pointer; font-size:0.88rem;" class="btn-pick-preset" data-id="${p.id}">
+                            ${p.name} (${p.model || '未选模型'})
+                        </div>
+                    `).join('');
+
+                    modal.innerHTML = `
+                        <div class="modal-box">
+                            <div class="modal-header"><div class="modal-title">切换 API 预设</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                            <div>${listHTML || '<div style="color:var(--text-sub);">暂无预设，可在 API 配置页面保存预设</div>'}</div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    modal.querySelector('.modal-close').onclick = () => modal.remove();
+                    modal.querySelectorAll('.btn-pick-preset').forEach(el => {
+                        el.onclick = async () => {
+                            const p = presets.find(item => item.id === el.dataset.id);
+                            await dbManager.saveItem('settings', { key: 'apiConfig', url: p.url, keyVal: p.keyVal, model: p.model, temp: p.temp });
+                            showToast(`已切换为预设: ${p.name}`); modal.remove();
+                        };
+                    });
+                };
+            }
+
+            bindCharPage() {
+                const box = document.getElementById('box-char-avatar');
+                const fileInput = document.getElementById('file-char-avatar');
+                box.onclick = () => fileInput.click();
+                fileInput.onchange = async (e) => {
+                    if (e.target.files[0]) {
+                        this.charAvatarData = await Parsers.fileToDataURL(e.target.files[0]);
+                        const img = document.getElementById('img-char-avatar-preview');
+                        img.src = this.charAvatarData; img.style.display = 'block';
+                        document.getElementById('char-avatar-tip').style.display = 'none';
+                    }
+                };
+
+                document.getElementById('trigger-char-file').onclick = () => document.getElementById('file-char-import').click();
+                document.getElementById('file-char-import').onchange = async (e) => {
+                    const f = e.target.files[0]; if (!f) return;
+                    document.getElementById('char-file-text').innerText = `已选文件: ${f.name}`;
+                    if (f.name.endsWith('.png')) {
+                        const res = await Parsers.parseTavernPngCard(f);
+                        document.getElementById('input-char-name').value = res.name;
+                        document.getElementById('input-char-desc').value = res.description;
+                        if (res.avatar) {
+                            this.charAvatarData = res.avatar;
+                            const img = document.getElementById('img-char-avatar-preview');
+                            img.src = this.charAvatarData; img.style.display = 'block';
+                            document.getElementById('char-avatar-tip').style.display = 'none';
+                        }
+                        showToast('酒馆卡解析完成！');
+                    } else {
+                        document.getElementById('input-char-desc').value = await f.text();
+                    }
+                };
+
+                document.getElementById('btn-save-char-item').onclick = async () => {
+                    const name = document.getElementById('input-char-name').value.trim();
+                    if (!name) { showToast('请填写角色名字'); return; }
+                    await dbManager.saveItem('chars', { id: 'char_' + Date.now(), name, description: document.getElementById('input-char-desc').value.trim(), avatar: this.charAvatarData });
+                    showToast('Char 人设已保存');
+                };
+
+                document.getElementById('btn-go-char-lib').onclick = () => {
+                    this.renderCharLibrary(); navigateTo('page-char-library');
+                };
+                document.querySelector('.btn-back-char-manage').onclick = () => navigateTo('page-char-manage');
+
+                document.getElementById('btn-char-multidel').onclick = async () => {
+                    if (this.selectedCharIds.size === 0) { showToast('请先点击卡片选中要删除的角色'); return; }
+                    if (confirm(`确定删除选中的 ${this.selectedCharIds.size} 个角色？`)) {
+                        for (let id of this.selectedCharIds) await dbManager.deleteItem('chars', id);
+                        this.selectedCharIds.clear(); this.renderCharLibrary(); showToast('删除完成');
+                    }
+                };
+
+                document.getElementById('btn-char-modify').onclick = async () => {
+                    if (this.selectedCharIds.size !== 1) { showToast('请选中 1 个角色进行修改'); return; }
+                    const charId = Array.from(this.selectedCharIds)[0];
+                    this.editingChar = await dbManager.getItem('chars', charId);
+                    const modal = document.getElementById('modal-edit-char');
+                    modal.style.display = 'flex';
+                    document.getElementById('edit-char-name').value = this.editingChar.name;
+                    document.getElementById('edit-char-desc').value = this.editingChar.description;
+                    const preview = document.getElementById('edit-char-avatar-preview');
+                    if (this.editingChar.avatar) preview.innerHTML = `<img src="${this.editingChar.avatar}">`;
+                    else preview.innerHTML = this.editingChar.name[0];
+                };
+
+                document.getElementById('btn-change-edit-avatar').onclick = () => document.getElementById('edit-char-file-avatar').click();
+                document.getElementById('edit-char-file-avatar').onchange = async (e) => {
+                    if (e.target.files[0]) {
+                        this.editingChar.avatar = await Parsers.fileToDataURL(e.target.files[0]);
+                        document.getElementById('edit-char-avatar-preview').innerHTML = `<img src="${this.editingChar.avatar}">`;
+                    }
+                };
+
+                document.getElementById('modal-edit-char').querySelector('.modal-close').onclick = () => {
+                    document.getElementById('modal-edit-char').style.display = 'none';
+                };
+                document.getElementById('btn-confirm-save-char-edit').onclick = async () => {
+                    this.editingChar.name = document.getElementById('edit-char-name').value.trim();
+                    this.editingChar.description = document.getElementById('edit-char-desc').value.trim();
+                    await dbManager.saveItem('chars', this.editingChar);
+                    showToast('修改已保存'); document.getElementById('modal-edit-char').style.display = 'none';
+                    this.renderCharLibrary();
+                };
+            }
+
+            async renderCharLibrary() {
+                const chars = await dbManager.getAllItems('chars');
+                const grid = document.getElementById('char-library-grid');
+                grid.innerHTML = chars.map(c => `
+                    <div class="persona-item-card ${this.selectedCharIds.has(c.id) ? 'selected' : ''}" data-id="${c.id}">
+                        <div class="persona-avatar">${c.avatar ? `<img src="${c.avatar}">` : c.name[0]}</div>
+                        <div class="persona-name">${c.name}</div>
+                    </div>
+                `).join('');
+                grid.querySelectorAll('.persona-item-card').forEach(card => {
+                    card.onclick = () => {
+                        const id = card.dataset.id;
+                        if (this.selectedCharIds.has(id)) this.selectedCharIds.delete(id);
+                        else this.selectedCharIds.add(id);
+                        card.classList.toggle('selected');
+                    };
+                });
+            }
+
+            bindUserPage() {
+                const box = document.getElementById('box-user-avatar');
+                const fileInput = document.getElementById('file-user-avatar');
+                box.onclick = () => fileInput.click();
+                fileInput.onchange = async (e) => {
+                    if (e.target.files[0]) {
+                        this.userAvatarData = await Parsers.fileToDataURL(e.target.files[0]);
+                        const img = document.getElementById('img-user-avatar-preview');
+                        img.src = this.userAvatarData; img.style.display = 'block';
+                        document.getElementById('user-avatar-tip').style.display = 'none';
+                    }
+                };
+
+                document.getElementById('trigger-user-file').onclick = () => document.getElementById('file-user-import').click();
+                document.getElementById('file-user-import').onchange = async (e) => {
+                    if (e.target.files[0]) {
+                        document.getElementById('user-file-text').innerText = `已选: ${e.target.files[0].name}`;
+                        document.getElementById('input-user-desc').value = await e.target.files[0].text();
+                    }
+                };
+
+                document.getElementById('btn-save-user-item').onclick = async () => {
+                    const name = document.getElementById('input-user-name').value.trim();
+                    if (!name) { showToast('请填写你的名字'); return; }
+                    await dbManager.saveItem('users', {
+                        id: 'user_' + Date.now(), name,
+                        relatedChar: document.getElementById('select-user-rel-char').value,
+                        description: document.getElementById('input-user-desc').value.trim(),
+                        avatar: this.userAvatarData
+                    });
+                    showToast('User 人设保存成功！');
+                };
+
+                document.getElementById('btn-go-user-lib').onclick = () => {
+                    this.renderUserLibrary(); navigateTo('page-user-library');
+                };
+                document.querySelector('.btn-back-user-manage').onclick = () => navigateTo('page-user-manage');
+
+                document.getElementById('btn-user-multidel').onclick = async () => {
+                    if (this.selectedUserIds.size === 0) { showToast('请先点击卡片选中要删除的 User'); return; }
+                    if (confirm(`确定删除选中的 ${this.selectedUserIds.size} 个 User？`)) {
+                        for (let id of this.selectedUserIds) await dbManager.deleteItem('users', id);
+                        this.selectedUserIds.clear(); this.renderUserLibrary(); showToast('删除完成');
+                    }
+                };
+            }
+
+            async refreshUserRelCharSelect() {
+                const chars = await dbManager.getAllItems('chars');
+                const sel = document.getElementById('select-user-rel-char');
+                sel.innerHTML = '<option value="">未关联</option>' + chars.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+            }
+
+            async renderUserLibrary() {
+                const users = await dbManager.getAllItems('users');
+                const grid = document.getElementById('user-library-grid');
+                grid.innerHTML = users.map(u => `
+                    <div class="persona-item-card ${this.selectedUserIds.has(u.id) ? 'selected' : ''}" data-id="${u.id}">
+                        <div class="persona-avatar">${u.avatar ? `<img src="${u.avatar}">` : u.name[0]}</div>
+                        <div class="persona-name">${u.name}</div>
+                        <div class="persona-relation">关联: ${u.relatedChar || '无'}</div>
+                    </div>
+                `).join('');
+                grid.querySelectorAll('.persona-item-card').forEach(card => {
+                    card.onclick = () => {
+                        const id = card.dataset.id;
+                        if (this.selectedUserIds.has(id)) this.selectedUserIds.delete(id);
+                        else this.selectedUserIds.add(id);
+                        card.classList.toggle('selected');
+                    };
+                });
+            }
+
+            bindWorldbookPage() {
+                document.getElementById('btn-wb-create-group').onclick = async () => {
+                    const name = prompt('请输入新分组名称:');
+                    if (name && name.trim()) {
+                        await dbManager.saveItem('categories', { id: 'cat_' + Date.now(), name: name.trim() });
+                        showToast('分组创建成功');
+                    }
+                };
+
+                document.getElementById('btn-wb-add-entry').onclick = async () => {
+                    const categories = await dbManager.getAllItems('categories');
+                    if (categories.length === 0) {
+                        alert('必须先创建分组之后，才可以创建世界书条目！'); return;
+                    }
+                    const modal = document.createElement('div'); modal.className = 'modal-overlay'; modal.style.display = 'flex';
+                    modal.innerHTML = `
+                        <div class="modal-box">
+                            <div class="modal-header"><div class="modal-title">添加世界书条目</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                            <div class="form-group"><label class="form-label">世界书名字:</label><input type="text" class="form-input" id="wb-entry-name"></div>
+                            <div class="form-group"><label class="form-label">选择分组:</label><select class="form-select" id="wb-entry-group">${categories.map(c => `<option value="${c.name}">${c.name}</option>`).join('')}</select></div>
+                            <div class="form-group"><label class="form-label">世界书内容:</label><textarea class="form-textarea" id="wb-entry-content" rows="4"></textarea></div>
+                            <button class="btn-primary" id="btn-save-wb-entry">保存世界书</button>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    modal.querySelector('.modal-close').onclick = () => modal.remove();
+                    modal.querySelector('#btn-save-wb-entry').onclick = async () => {
+                        const name = modal.querySelector('#wb-entry-name').value.trim();
+                        const content = modal.querySelector('#wb-entry-content').value.trim();
+                        if (!name || !content) { showToast('请填写完整内容'); return; }
+                        await dbManager.saveItem('worldbooks', { id: 'wb_' + Date.now(), name, group: modal.querySelector('#wb-entry-group').value, content });
+                        showToast('世界书条目已添加！'); modal.remove(); this.renderWorldbookList();
+                    };
+                };
+            }
+
+            async renderWorldbookList() {
+                const wbs = await dbManager.getAllItems('worldbooks');
+                const container = document.getElementById('wb-entries-container');
+                container.innerHTML = wbs.map(w => `
+                    <div style="background:var(--bg-card); border:1px solid var(--border-line); border-radius:var(--radius-m); padding:12px; margin-bottom:10px;">
+                        <div style="font-weight:600; font-size:0.92rem;">${w.name} <span style="font-size:0.75rem; color:var(--text-sub); font-weight:normal;">[${w.group}]</span></div>
+                        <div style="font-size:0.82rem; color:var(--text-sub); margin-top:4px; white-space:pre-wrap;">${w.content}</div>
+                    </div>
+                `).join('') || '<div style="color:var(--text-sub); text-align:center; margin-top:40px;">暂无世界书条目，点击右上角加号创建</div>';
+            }
+
+            bindDataPage() {
+                document.getElementById('btn-export-full-data').onclick = async () => {
+                    const books = await dbManager.getAllItems('books');
+                    const chars = await dbManager.getAllItems('chars');
+                    const users = await dbManager.getAllItems('users');
+                    const worldbooks = await dbManager.getAllItems('worldbooks');
+                    const settings = await dbManager.getAllItems('settings');
+                    const apiPresets = await dbManager.getAllItems('apiPresets');
+
+                    const jsonStr = JSON.stringify({ books, chars, users, worldbooks, settings, apiPresets, time: new Date().toISOString() }, null, 2);
+                    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([jsonStr], { type: 'application/json' }));
+                    a.download = `RainyNovel_Backup_${Date.now()}.json`; a.click();
+                    showToast('已导出备份 JSON');
+                };
+
+                document.getElementById('trigger-import-data').onclick = () => document.getElementById('file-import-data').click();
+                document.getElementById('file-import-data').onchange = async (e) => {
+                    const file = e.target.files[0]; if (!file) return;
+                    document.getElementById('data-file-tip').innerText = `已选备份: ${file.name}`;
+                    const text = await file.text();
+                    try {
+                        const data = JSON.parse(text);
+                        if (data.books) for (let b of data.books) await dbManager.saveItem('books', b);
+                        if (data.chars) for (let c of data.chars) await dbManager.saveItem('chars', c);
+                        if (data.users) for (let u of data.users) await dbManager.saveItem('users', u);
+                        if (data.worldbooks) for (let w of data.worldbooks) await dbManager.saveItem('worldbooks', w);
+                        if (data.settings) for (let s of data.settings) await dbManager.saveItem('settings', s);
+                        showToast('数据恢复成功！'); app.loadBookshelf();
+                    } catch (err) { showToast('解析 JSON 失败'); }
+                };
+
+                document.getElementById('btn-reader-char').onclick = () => this.showReaderCompanionFlow();
+            }
+
+            async showReaderCompanionFlow() {
+                if (app.activeChar && app.activeUser) {
+                    const modal = document.createElement('div'); modal.className = 'modal-overlay'; modal.style.display = 'flex';
+                    const worldbooks = await dbManager.getAllItems('worldbooks');
+                    let wbListHTML = worldbooks.map(w => {
+                        const isActive = app.activeWorldbooks.some(item => item.id === w.id);
+                        return `
+                            <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-line);">
+                                <div>${w.name}</div>
+                                <input type="checkbox" class="wb-reader-toggle" data-id="${w.id}" ${isActive ? 'checked' : ''}>
+                            </div>
+                        `;
+                    }).join('');
+
+                    modal.innerHTML = `
+                        <div class="modal-box">
+                            <div class="modal-header">
+                                <div class="modal-title">当前陪读伴侣</div>
+                                <div style="display:flex; gap:6px;">
+                                    <button class="nav-btn" id="btn-repick-companion" title="重新选择"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                                    <button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                                </div>
+                            </div>
+                            <div style="display:flex; justify-content:space-around; margin:10px 0 16px 0;">
+                                <div style="text-align:center;">
+                                    <div class="persona-avatar" style="margin:0 auto 4px auto;">${app.activeChar.avatar ? `<img src="${app.activeChar.avatar}">` : app.activeChar.name[0]}</div>
+                                    <div style="font-size:0.8rem; font-weight:600;">Char: ${app.activeChar.name}</div>
+                                </div>
+                                <div style="text-align:center;">
+                                    <div class="persona-avatar" style="margin:0 auto 4px auto;">${app.activeUser.avatar ? `<img src="${app.activeUser.avatar}">` : app.activeUser.name[0]}</div>
+                                    <div style="font-size:0.8rem; font-weight:600;">User: ${app.activeUser.name}</div>
+                                </div>
+                            </div>
+                            <div style="font-size:0.85rem; font-weight:600; margin-bottom:6px;">世界书条目开关:</div>
+                            <div style="max-height:30vh; overflow-y:auto;">${wbListHTML || '<div style="color:var(--text-sub);">暂无世界书</div>'}</div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    modal.querySelector('.modal-close').onclick = () => modal.remove();
+                    modal.querySelector('#btn-repick-companion').onclick = () => { modal.remove(); app.activeChar = null; app.activeUser = null; this.showReaderCompanionFlow(); };
+                    modal.querySelectorAll('.wb-reader-toggle').forEach(ck => {
+                        ck.onchange = () => {
+                            const checkedIds = Array.from(modal.querySelectorAll('.wb-reader-toggle:checked')).map(c => c.dataset.id);
+                            app.activeWorldbooks = worldbooks.filter(w => checkedIds.includes(w.id));
+                        };
+                    });
+                    return;
+                }
+
+                const chars = await dbManager.getAllItems('chars');
+                const users = await dbManager.getAllItems('users');
+                if (chars.length === 0) {
+                    alert('你的爱人似乎还没来呢，赶快去邀请个爱人来陪你一起看吧^^');
+                    return;
+                }
+
+                const modalChar = document.createElement('div'); modalChar.className = 'modal-overlay'; modalChar.style.display = 'flex';
+                modalChar.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header"><div class="modal-title">选择陪同爱人 (Char)</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                        <div class="persona-grid-5">${chars.map(c => `
+                            <div class="persona-item-card btn-select-char" data-id="${c.id}">
+                                <div class="persona-avatar">${c.avatar ? `<img src="${c.avatar}">` : c.name[0]}</div>
+                                <div class="persona-name">${c.name}</div>
+                            </div>
+                        `).join('')}</div>
+                    </div>
+                `;
+                document.body.appendChild(modalChar);
+                modalChar.querySelector('.modal-close').onclick = () => modalChar.remove();
+
+                modalChar.querySelectorAll('.btn-select-char').forEach(el => {
+                    el.onclick = () => {
+                        app.activeChar = chars.find(c => c.id === el.dataset.id);
+                        modalChar.remove();
+                        this.stepSelectUser(users);
+                    };
+                });
+            }
+
+            stepSelectUser(users) {
+                const modalUser = document.createElement('div'); modalUser.className = 'modal-overlay'; modalUser.style.display = 'flex';
+                modalUser.innerHTML = `
+                    <div class="modal-box">
+                        <div class="modal-header"><div class="modal-title">选择你的身份 (User)</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                        <div class="persona-grid-4">${users.map(u => `
+                            <div class="persona-item-card btn-select-user" data-id="${u.id}">
+                                <div class="persona-avatar">${u.avatar ? `<img src="${u.avatar}">` : u.name[0]}</div>
+                                <div class="persona-name">${u.name}</div>
+                                <div class="persona-relation">关联: ${u.relatedChar || '无'}</div>
+                            </div>
+                        `).join('') || '<div style="grid-column:1/-1; color:var(--text-sub);">暂无 User，可在侧边栏创建</div>'}</div>
+                    </div>
+                `;
+                document.body.appendChild(modalUser);
+                modalUser.querySelector('.modal-close').onclick = () => modalUser.remove();
+
+                modalUser.querySelectorAll('.btn-select-user').forEach(el => {
+                    el.onclick = async () => {
+                        app.activeUser = users.find(u => u.id === el.dataset.id);
+                        modalUser.remove();
+                        if (confirm('是否绑定世界书？')) {
+                            const worldbooks = await dbManager.getAllItems('worldbooks');
+                            const modalWb = document.createElement('div'); modalWb.className = 'modal-overlay'; modalWb.style.display = 'flex';
+                            modalWb.innerHTML = `
+                                <div class="modal-box">
+                                    <div class="modal-header"><div class="modal-title">绑定世界书</div><button class="modal-close"><svg class="svg-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+                                    <div>${worldbooks.map(w => `
+                                        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border-line);">
+                                            <div>${w.name}</div><input type="checkbox" class="wb-select-item" data-id="${w.id}" checked>
+                                        </div>
+                                    `).join('')}</div>
+                                    <button class="btn-primary" id="btn-confirm-wb-bind" style="margin-top:14px;">确认绑定</button>
+                                </div>
+                            `;
+                            document.body.appendChild(modalWb);
+                            modalWb.querySelector('.modal-close').onclick = () => modalWb.remove();
+                            modalWb.querySelector('#btn-confirm-wb-bind').onclick = () => {
+                                const checkedIds = Array.from(modalWb.querySelectorAll('.wb-select-item:checked')).map(c => c.dataset.id);
+                                app.activeWorldbooks = worldbooks.filter(w => checkedIds.includes(w.id));
+                                modalWb.remove();
+                                showToast(`已成功绑定 ${app.activeChar.name} 陪看^^`);
+                            };
+                        } else {
+                            app.activeWorldbooks = [];
+                            showToast(`已成功绑定 ${app.activeChar.name} 陪看^^`);
+                        }
+                    };
+                });
+            }
+        }
+
+        /* 5. 真实段评生态 (支持 Char 多轮对话 + 路人 NPC 真实回帖互动) */
+        AppController.prototype.openCommentDrawer = async function(paraId, selectedText) {
+            const drawer = document.getElementById('drawer-comments');
+            drawer.classList.add('open');
+            
+            document.getElementById('comment-quote-header').innerText = `［段落］“${selectedText}”`;
+            let commentsData = (await dbManager.getItem('comments', paraId)) || { id: paraId, list: [] };
+            
+            // replyTarget 结构：null | { type: 'passerby', index, name } | { type: 'char', index, charName }
+            let replyTarget = null; 
+
+            const render = () => {
+                const container = document.getElementById('comment-list-container');
+                if (commentsData.list.length === 0) {
+                    container.innerHTML = `<div style="text-align:center; color:var(--text-sub); margin-top:30px; font-size:0.8rem;">暂无评论，点击上方五角星由 AI 实时生成真实书评，或发表你的看法吧^^</div>`;
+                    return;
+                }
+
+                container.innerHTML = commentsData.list.map((c, idx) => {
+                    const isSelf = (app.activeUser && c.name === app.activeUser.name) || c.name === 'User';
+                    
+                    // Char 对话流
+                    let charThread = c.charThread || [];
+                    if (charThread.length === 0 && c.charReply) {
+                        charThread = [{ role: 'char', name: c.charReply.name, text: c.charReply.text, time: c.charReply.time }];
+                    }
+
+                    const charThreadHTML = charThread.length > 0 ? `
+                        <div style="margin: 8px 0 6px 28px; padding: 8px 10px; background: var(--btn-bg); border-radius: 8px; border-left: 2px solid var(--text-sub);">
+                            ${charThread.map((msg, mIdx) => {
+                                const isChar = msg.role === 'char';
+                                return `
+                                    <div style="margin-bottom: ${mIdx === charThread.length - 1 ? '0' : '8px'}; border-bottom: ${mIdx === charThread.length - 1 ? 'none' : '1px dashed var(--border-line)'}; padding-bottom: ${mIdx === charThread.length - 1 ? '0' : '6px'};">
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <span style="font-weight:600; color:var(--text-main); font-size:0.75rem;">${msg.name}</span>
+                                            <span style="font-size:0.65rem; color:var(--text-sub);">${isChar ? '伴侣回应' : '你的追问'}</span>
+                                            <span style="font-size:0.65rem; color:var(--text-sub); margin-left:auto;">${msg.time || ''}</span>
+                                        </div>
+                                        <div style="color:var(--text-main); font-size:0.78rem; line-height:1.45; margin-top:2px;">${msg.text}</div>
+                                        ${isChar ? `
+                                            <div style="text-align:right; margin-top:2px;">
+                                                <span style="font-size:0.68rem; color:var(--text-sub); cursor:pointer;" onclick="window._replyToChar(${idx}, '${msg.name}')">回复</span>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : '';
+
+                    // 楼中楼路人 NPC 回复列表
+                    const subRepliesHTML = (c.replies && c.replies.length > 0) ? `
+                        <div style="margin-top:6px; margin-left:28px;">
+                            <div class="reply-toggle" style="font-size:0.72rem; color:var(--text-sub); cursor:pointer; margin-bottom:4px;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                                查看回复 (${c.replies.length}条) ▾
+                            </div>
+                            <div class="sub-replies-box" style="display:block; background:var(--bg-hover); border-radius:8px; padding:6px 10px;">
+                                ${c.replies.map(r => `
+                                    <div style="font-size:0.75rem; margin-bottom:6px; line-height:1.4;">
+                                        <div style="display:flex; align-items:center; gap:6px;">
+                                            <span style="font-weight:600; color:var(--text-main);">${r.name}:</span>
+                                            <span style="font-size:0.65rem; color:var(--text-sub); margin-left:auto;">${r.time || ''}</span>
+                                        </div>
+                                        <div style="color:var(--text-main); margin-top:1px;">${r.text}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div class="comment-item" style="padding:10px 0; border-bottom:1px solid var(--border-line);">
+                            <div class="comment-user" style="display:flex; align-items:center; gap:8px;">
+                                <div class="comment-avatar" style="width:26px; height:26px; border-radius:50%; background:var(--btn-bg); display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:600; overflow:hidden;">
+                                    ${c.avatar ? `<img src="${c.avatar}" style="width:100%;height:100%;object-fit:cover;">` : c.name[0]}
+                                </div>
+                                <div style="font-size:0.8rem; font-weight:600;">${c.name}</div>
+                            </div>
+                            <div class="comment-content" style="font-size:0.85rem; color:var(--text-main); margin:4px 0 6px 34px; line-height:1.5;">${c.text}</div>
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-left:34px; font-size:0.7rem; color:var(--text-sub);">
+                                <span>${c.time || '刚刚'}</span>
+                                <div style="display:flex; gap:12px;">
+                                    <span style="cursor:pointer;" onclick="window._replyToPasserby(${idx}, '${c.name}')">回复</span>
+                                    ${isSelf ? `<span style="cursor:pointer;" onclick="window._editComment(${idx})">修改</span><span style="cursor:pointer;" onclick="window._deleteComment(${idx})">删除</span>` : ''}
+                                </div>
+                            </div>
+                            ${charThreadHTML}
+                            ${subRepliesHTML}
+                        </div>
+                    `;
+                }).join('');
+            };
+
+            window._deleteComment = async (index) => {
+                commentsData.list.splice(index, 1);
+                await dbManager.saveItem('comments', commentsData);
+                render();
+            };
+            window._editComment = async (index) => {
+                const oldText = commentsData.list[index].text;
+                const newText = prompt('修改你的段评:', oldText);
+                if (newText && newText.trim()) {
+                    commentsData.list[index].text = newText.trim();
+                    await dbManager.saveItem('comments', commentsData);
+                    render();
+                }
+            };
+            window._replyToPasserby = (index, targetName) => {
+                replyTarget = { type: 'passerby', index, name: targetName };
+                const input = document.getElementById('comment-input');
+                input.placeholder = `回复 @${targetName}：`;
+                input.focus();
+            };
+            window._replyToChar = (index, charName) => {
+                replyTarget = { type: 'char', index, charName };
+                const input = document.getElementById('comment-input');
+                input.placeholder = `回复 @${charName}（将结合上文继续聊）：`;
+                input.focus();
+            };
+
+            render();
+
+            // ⭐ 五角星：调用 API 动态生成真实路人段评
+            document.getElementById('btn-magic-wand').onclick = async () => {
+                const loadingBar = document.getElementById('comment-loading-bar');
+                loadingBar.style.display = 'block';
+                loadingBar.innerText = '正在调用 AI 实时生成本段真实书粉讨论...';
+
+                const cfg = await dbManager.getItem('settings', 'apiConfig');
+                if (cfg && cfg.url && cfg.keyVal) {
+                    try {
+                        const promptText = `请针对以下小说段落：“${selectedText}”，模拟 6~10 条极其逼真、多样化的中文网文读者段评与互动讨论。
+【要求】：
+1. 包含多种读者（玩梗、深度分析长评、磕CP、吐槽等）。
+2. 每条读者必须有逼真的网名。
+3. 必须输出以下纯 JSON 数组，严禁其他解说词：
+[
+  {
+    "name": "读者网名",
+    "text": "评论内容",
+    "replies": [
+      { "name": "跟帖读者名", "text": "回复内容" }
+    ]
+  }
+]`;
+                        const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/chat/completions`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.keyVal}` },
+                            body: JSON.stringify({
+                                model: cfg.model || 'gpt-3.5-turbo',
+                                temperature: 0.85,
+                                messages: [{ role: 'user', content: promptText }]
+                            })
+                        });
+                        const data = await res.json();
+                        const raw = data.choices[0].message.content.trim();
+                        const jsonStr = raw.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '').trim();
+                        const parsedList = JSON.parse(jsonStr);
+
+                        parsedList.forEach(item => {
+                            commentsData.list.push({
+                                name: item.name,
+                                text: item.text,
+                                time: '刚刚',
+                                replies: (item.replies || []).map(r => ({ name: r.name, text: r.text, time: '刚刚' }))
+                            });
+                        });
+
+                        await dbManager.saveItem('comments', commentsData);
+                        loadingBar.style.display = 'none';
+                        render();
+                        showToast(`已生成 ${parsedList.length} 条真实讨论！`);
+                        return;
+                    } catch (e) {
+                        console.warn('API 生成失败，走备用通道', e);
+                    }
+                }
+
+                await new Promise(r => setTimeout(r, 600));
+                const randomId = Math.floor(Math.random() * 900 + 100);
+                commentsData.list.push({
+                    name: `书友_${randomId}`,
+                    text: `对这段剧情很有感触，细节处理得太棒了！`,
+                    time: '刚刚',
+                    replies: [{ name: `催更狂魔`, text: '同感，蹲作者后续更新！', time: '刚刚' }]
+                });
+                await dbManager.saveItem('comments', commentsData);
+                loadingBar.style.display = 'none';
+                render();
+                showToast('已生成讨论！');
+            };
+
+            // 发送消息处理
+            document.getElementById('btn-send-comment').onclick = async () => {
+                const input = document.getElementById('comment-input');
+                const val = input.value.trim();
+                if (!val) return;
+
+                const userName = (app.activeUser && app.activeUser.name) ? app.activeUser.name : 'User';
+                const userAvatar = app.activeUser ? app.activeUser.avatar : '';
+                const charName = app.activeChar ? app.activeChar.name : 'Char';
+
+                let targetIndex = -1;
+                let actionType = 'main'; // 'main' | 'reply_char' | 'reply_npc'
+                let targetNpcName = '';
+
+                if (replyTarget && replyTarget.type === 'char') {
+                    // 1. 回复 Char
+                    actionType = 'reply_char';
+                    targetIndex = replyTarget.index;
+                    const cItem = commentsData.list[targetIndex];
+                    if (!cItem.charThread) {
+                        cItem.charThread = cItem.charReply ? [{ role: 'char', name: cItem.charReply.name, text: cItem.charReply.text, time: cItem.charReply.time }] : [];
+                    }
+                    cItem.charThread.push({ role: 'user', name: userName, text: val, time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) });
+                    cItem.charThread.push({ role: 'char', name: charName, text: `${charName} 正在思考回复...`, time: '思考中' });
+                    replyTarget = null;
+                    input.placeholder = '发表对这段剧情的看法...';
+                } else if (replyTarget && replyTarget.type === 'passerby') {
+                    // 2. 回复路人 NPC（已修复变量名）
+                    actionType = 'reply_npc';
+                    targetIndex = replyTarget.index;
+                    targetNpcName = replyTarget.name;
+                    const targetComment = commentsData.list[targetIndex];
+                    if (targetComment) {
+                        if (!targetComment.replies) targetComment.replies = [];
+                        targetComment.replies.push({
+                            name: userName,
+                            text: val,
+                            time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                        });
+                    }
+                    replyTarget = null;
+                    input.placeholder = '发表对这段剧情的看法...';
+                } else {
+                    // 3. 主楼首发
+                    actionType = 'main';
+                    const newComment = {
+                        name: userName,
+                        avatar: userAvatar,
+                        text: val,
+                        time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+                        charThread: app.activeChar ? [{ role: 'char', name: charName, text: `${charName} 正在看这段剧情并思考回复...`, time: '思考中' }] : [],
+                        replies: []
+                    };
+                    commentsData.list.push(newComment);
+                    targetIndex = commentsData.list.length - 1;
+                }
+
+                input.value = '';
+                await dbManager.saveItem('comments', commentsData);
+                render();
+
+                const cfg = await dbManager.getItem('settings', 'apiConfig');
+
+                // --- 触发 NPC 真实互动回复 ---
+                if (actionType === 'reply_npc' && targetIndex !== -1) {
+                    const targetComment = commentsData.list[targetIndex];
+                    if (cfg && cfg.url && cfg.keyVal) {
+                        try {
+                            const npcPrompt = `小说当前段落：“${selectedText}”\n楼主 [${targetNpcName}] 的原主评：“${targetComment.text}”\n读者 [${userName}] 回复说：“${val}”\n请以楼主读者 [${targetNpcName}] 的口吻直接回复 [${userName}]（纯文字对话，可吐槽/讨论/赞同，严禁动作描写）：`;
+                            const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/chat/completions`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.keyVal}` },
+                                body: JSON.stringify({
+                                    model: cfg.model || 'gpt-3.5-turbo',
+                                    temperature: 0.8,
+                                    messages: [{ role: 'user', content: npcPrompt }]
+                                })
+                            });
+                            const data = await res.json();
+                            let cleanReply = data.choices[0].message.content.replace(/[\*\(（\[【][^\*）\)\]】]*[\*\)）\]】]/g, '').trim();
+                            targetComment.replies.push({
+                                name: targetNpcName,
+                                text: cleanReply,
+                                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                            });
+                            await dbManager.saveItem('comments', commentsData);
+                            render();
+                        } catch (e) {
+                            console.error('NPC API 回复失败，使用备用回复', e);
+                        }
+                    } else {
+                        // 备用离线路人互动
+                        setTimeout(async () => {
+                            const offlineReplies = ['哈哈哈哈确实！', '你这句说到点子上了', '握手握手，我也是这么想的！', '蹲一个后续！'];
+                            targetComment.replies.push({
+                                name: targetNpcName,
+                                text: offlineReplies[Math.floor(Math.random() * offlineReplies.length)],
+                                time: '刚刚'
+                            });
+                            await dbManager.saveItem('comments', commentsData);
+                            render();
+                        }, 800);
+                    }
+                }
+
+                // --- 触发 Char 多轮上下文回复 ---
+                if (app.activeChar && targetIndex !== -1 && (actionType === 'main' || actionType === 'reply_char')) {
+                    if (cfg && cfg.url && cfg.keyVal) {
+                        const targetComment = commentsData.list[targetIndex];
+                        let systemPrompt = `你现在是用户（User）的恋人 [${charName}]，正坐在旁边陪用户一起看小说发段评讨论剧情。
+你的性格设定：${app.activeChar.description || '真实、自然、带有一点吐槽与真实感'}。
+User（伴侣）人设：${app.activeUser ? app.activeUser.description : '普通人'}。
+【核心禁令与要求】：
+1. 绝对禁止输出任何动作描写、神态描写或心理描写！（严禁出现 *动作*、[动作]、(神态) 等任何括号或星号）。
+2. 你必须完全像在发真实网络段评一样，纯对话纯文字输出！
+3. 请以恋人视角，带着点吐槽或真实的真情实感纯文本回复对方，严格保持上文对话的连贯性。`;
+
+                        if (app.activeWorldbooks && app.activeWorldbooks.length > 0) {
+                            systemPrompt += `\n【世界书设定】:\n` + app.activeWorldbooks.map(w => w.content).join('\n');
+                        }
+
+                        const messagesPayload = [
+                            { role: 'system', content: systemPrompt },
+                            { role: 'user', content: `小说当前段落：“${selectedText}”\n我的段评：“${targetComment.text}”` }
+                        ];
+
+                        const threadHistory = targetComment.charThread || [];
+                        for (let i = 0; i < threadHistory.length - 1; i++) {
+                            const msg = threadHistory[i];
+                            if (msg.role === 'char') messagesPayload.push({ role: 'assistant', content: msg.text });
+                            else if (msg.role === 'user') messagesPayload.push({ role: 'user', content: msg.text });
+                        }
+
+                        try {
+                            const res = await fetch(`${cfg.url.replace(/\/+$/, '')}/chat/completions`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.keyVal}` },
+                                body: JSON.stringify({
+                                    model: cfg.model || 'gpt-3.5-turbo',
+                                    temperature: cfg.temp || 0.7,
+                                    messages: messagesPayload
+                                })
+                            });
+                            const data = await res.json();
+                            let cleanReply = data.choices[0].message.content.replace(/[\*\(（\[【][^\*）\)\]】]*[\*\)）\]】]/g, '').trim();
+
+                            if (commentsData.list[targetIndex] && commentsData.list[targetIndex].charThread) {
+                                const th = commentsData.list[targetIndex].charThread;
+                                th[th.length - 1] = {
+                                    role: 'char',
+                                    name: charName,
+                                    text: cleanReply,
+                                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                };
+                                await dbManager.saveItem('comments', commentsData);
+                                render();
+                            }
+                        } catch (e) {
+                            if (commentsData.list[targetIndex] && commentsData.list[targetIndex].charThread) {
+                                const th = commentsData.list[targetIndex].charThread;
+                                th[th.length - 1] = {
+                                    role: 'char',
+                                    name: charName,
+                                    text: `(API 请求失败，请检查网络或配置)`,
+                                    time: '异常'
+                                };
+                                render();
+                            }
+                        }
+                    }
+                }
+            };
+
+            // 关闭评论局部更新角标
+            document.getElementById('btn-close-comments').onclick = () => {
+                drawer.classList.remove('open');
+                replyTarget = null;
+                document.getElementById('comment-input').placeholder = '发表对这段剧情的看法...';
+
+                const pEl = document.querySelector(`p.reader-paragraph[data-para-index="${paraId.split('_').pop()}"]`);
+                if (pEl) {
+                    const existingBadge = pEl.querySelector('.comment-badge');
+                    if (existingBadge) existingBadge.remove();
+                    if (commentsData.list.length > 0) {
+                        const badge = document.createElement('span');
+                        badge.className = 'comment-badge';
+                        badge.innerHTML = `<svg class="svg-icon" style="width:11px;height:11px" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> ${commentsData.list.length}`;
+                        badge.onclick = (e) => { e.stopPropagation(); app.openCommentDrawer(paraId, selectedText); };
+                        pEl.appendChild(badge);
+                    }
+                }
+            };
+        };
+
+        // 启动主程序
+        const app = new AppController();
+        const managementCtrl = new ManagementController();
+        window.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+</html>
